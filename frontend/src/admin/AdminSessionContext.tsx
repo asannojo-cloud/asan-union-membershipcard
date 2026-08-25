@@ -1,10 +1,10 @@
 import { createContext, useContext, type ReactNode } from "react";
-import { useAdminSession, type AdminInfo } from "./useAdminSession";
+import { useAdminSession, type AdminInfo, type AdminLoginResult } from "./useAdminSession";
 
 interface AdminSessionValue {
   admin: AdminInfo | null;
   loading: boolean;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string, totpCode?: string) => Promise<AdminLoginResult>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 }

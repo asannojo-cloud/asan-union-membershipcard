@@ -4,6 +4,13 @@ import { api } from "../shared/api";
 export interface AdminInfo {
   username: string;
   name: string;
+  totpEnabled: boolean;
+}
+
+export interface AdminLoginResult {
+  ok: boolean;
+  needsTotp?: boolean;
+  name?: string;
 }
 
 export function useAdminSession() {
@@ -26,10 +33,13 @@ export function useAdminSession() {
     refresh();
   }, [refresh]);
 
+  // 2단계 인증이 켜진 계정은 서버가 곧바로 로그인시키지 않고 needsTotp를 돌려줄 수 있어
+  // 결과를 그대로 반환한다 — 화면에서 그 값을 보고 인증번호 입력 단계로 넘어갈지 판단한다.
   const login = useCallback(
-    async (username: string, password: string) => {
-      await api.post("/admin/auth/login", { username, password });
-      await refresh();
+    async (username: string, password: string, totpCode?: string): Promise<AdminLoginResult> => {
+      const result = await api.post<AdminLoginResult>("/admin/auth/login", { username, password, totpCode });
+      if (result.ok) await refresh();
+      return result;
     },
     [refresh]
   );

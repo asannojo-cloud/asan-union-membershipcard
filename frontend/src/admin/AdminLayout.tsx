@@ -8,6 +8,7 @@ const links = [
   { to: "/admin/excel", label: "Excel 관리" },
   { to: "/admin/photo-batch", label: "사진 일괄 업로드" },
   { to: "/admin/audit-logs", label: "변경 이력" },
+  { to: "/admin/security", label: "보안 설정" },
 ];
 
 export default function AdminLayout() {

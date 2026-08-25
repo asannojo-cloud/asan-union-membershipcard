@@ -18,6 +18,7 @@ import ExcelUploadPage from "./admin/ExcelUploadPage";
 import ExcelHistoryPage from "./admin/ExcelHistoryPage";
 import AuditLogsPage from "./admin/AuditLogsPage";
 import PhotoBatchUploadPage from "./admin/PhotoBatchUploadPage";
+import AdminSecurityPage from "./admin/AdminSecurityPage";
 
 export default function App() {
   useBackExitGuard();
@@ -58,6 +59,7 @@ export default function App() {
                 <Route path="excel/history" element={<ExcelHistoryPage />} />
                 <Route path="photo-batch" element={<PhotoBatchUploadPage />} />
                 <Route path="audit-logs" element={<AuditLogsPage />} />
+                <Route path="security" element={<AdminSecurityPage />} />
               </Route>
               <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
             </Routes>
