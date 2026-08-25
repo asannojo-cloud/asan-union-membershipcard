@@ -25,7 +25,7 @@ const MEMBER_SERVICES = [
   },
   {
     label: "차량대여사업",
-    url: "https://asanvehicle-fwznm5ba.manus.space/",
+    url: "https://asan-union-carrental.onrender.com/",
     icon: <VanIcon />,
   },
 ];
