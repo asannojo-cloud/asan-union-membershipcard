@@ -62,7 +62,21 @@ export function createApp() {
 
   app.use("/api", apiRateLimiter);
 
-  app.get("/api/health", (req, res) => res.json({ ok: true }));
+  // UptimeRobot 등 외부 핑이 이 엔드포인트를 주기적으로 호출해 Render 웹서비스의
+  // 절전(cold start)을 막아주고 있는데, DB 쿼리를 하나도 안 날리다 보니 Neon(무료 tier,
+  // 일정 시간 미사용 시 컴퓨트 자동 절전) 쪽은 계속 잠들어 있었다. 그 결과 로그인처럼
+  // 실제로 DB에 처음 접근하는 요청에서만 Neon이 깨어나느라 로딩이 오래 걸리는 문제가
+  // 있었다(2026-08-19 재신고 확인). 가벼운 SELECT 1을 함께 날려 DB 커넥션도 계속
+  // 깨어있게 유지한다. DB 쪽에 일시적 문제가 있어도 서버 자체는 살아있는 것이므로
+  // 200으로 응답해 UptimeRobot이 서비스 전체가 죽은 것으로 오인하지 않게 한다.
+  app.get("/api/health", async (req, res) => {
+    try {
+      await pool.query("SELECT 1");
+      res.json({ ok: true });
+    } catch {
+      res.json({ ok: true, db: false });
+    }
+  });
 
   app.use("/api/member/login", loginRateLimiter);
   app.use("/api/member", memberAuthRouter);
