@@ -5,6 +5,7 @@ import { memberGuard } from "../../middleware/guards";
 import { streamPhotoOrDefault } from "../photos/photos.service";
 import { recordAudit } from "../audit/audit.service";
 import { parsePhone } from "../../utils/phoneUtils";
+import { hashPhone } from "../../utils/phoneCrypto";
 import { isLocked, registerFailedAttempt, resetFailedAttempts, verifyPassword, hashPassword } from "./auth.service";
 
 export const memberAuthRouter = Router();
@@ -56,8 +57,8 @@ memberAuthRouter.post("/login", async (req, res) => {
   const inputName = name.trim();
   const { rows } = await pool.query(
     `SELECT id, member_id, name, status, password_hash, must_reset_password, failed_login_count, locked_until
-     FROM members WHERE phone = $1`,
-    [phoneParsed.normalized]
+     FROM members WHERE phone_hash = $1`,
+    [hashPhone(phoneParsed.normalized)]
   );
   const candidate = rows[0];
   const nameMatches =

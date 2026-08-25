@@ -22,6 +22,12 @@ export const env = {
   port: parseInt(process.env.PORT ?? "4000", 10),
   databaseUrl: required("DATABASE_URL"),
   sessionSecret: required("SESSION_SECRET"),
+  // 휴대폰번호 필드 암호화(1단계 개인정보 보호 조치, 2026-08-20)에 쓰는 키.
+  // FIELD_ENCRYPTION_KEY: AES-256-GCM 암복호화 키(base64, 32바이트).
+  // PHONE_HASH_SECRET: 조회/중복확인용 HMAC 해시 키. 둘 다 분실하면 기존에 암호화된
+  // 전화번호를 영영 복구할 수 없으니, 운영 환경변수와는 별도로 안전한 곳에 사본을 보관해야 한다.
+  fieldEncryptionKey: required("FIELD_ENCRYPTION_KEY"),
+  phoneHashSecret: required("PHONE_HASH_SECRET"),
   frontendOrigin: process.env.FRONTEND_ORIGIN ?? "http://localhost:5173",
   loginMaxAttempts: parseInt(process.env.LOGIN_MAX_ATTEMPTS ?? "5", 10),
   loginLockMinutes: parseInt(process.env.LOGIN_LOCK_MINUTES ?? "15", 10),

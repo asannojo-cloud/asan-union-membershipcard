@@ -1,4 +1,6 @@
 import { pool } from "../../db/pool";
+import { parsePhone } from "../../utils/phoneUtils";
+import { decryptPhone, hashPhone } from "../../utils/phoneCrypto";
 
 export interface MemberSearchParams {
   query?: string;
@@ -14,7 +16,17 @@ export async function searchMembers(params: MemberSearchParams) {
 
   if (params.query) {
     values.push(`%${params.query}%`);
-    conditions.push(`(member_id ILIKE $${values.length} OR name ILIKE $${values.length} OR phone ILIKE $${values.length})`);
+    const textCond = `(member_id ILIKE $${values.length} OR name ILIKE $${values.length})`;
+    // 전화번호는 암호화되어 있어 부분(ILIKE) 검색은 더 이상 불가능하다. 검색어가
+    // 전화번호 전체 형식으로 보이면, 해시로 정확히 일치하는 건만 추가로 매칭해준다
+    // (2026-08-20 전화번호 암호화 1단계 — "010-1234" 같은 일부 검색은 이제 안 됨).
+    const phoneParsed = parsePhone(params.query);
+    if (phoneParsed.ok) {
+      values.push(hashPhone(phoneParsed.normalized));
+      conditions.push(`(${textCond} OR phone_hash = $${values.length})`);
+    } else {
+      conditions.push(textCond);
+    }
   }
   if (params.status) {
     values.push(params.status);
@@ -45,7 +57,7 @@ export async function searchMembers(params: MemberSearchParams) {
   // (2026-08-14 회원관리 화면에서 순서가 이상하다는 지적으로 발견). 연도/일련번호를
   // 숫자로 쪼개서 정렬하고, 그 형식이 아닌 회원번호는 맨 뒤로 보낸다.
   const { rows } = await pool.query(
-    `SELECT member_id, name, status, issue_date, phone, (photo_path IS NOT NULL) AS has_photo
+    `SELECT member_id, name, status, issue_date, phone_enc, (photo_path IS NOT NULL) AS has_photo
      FROM members
      ${where}
      ORDER BY
@@ -63,19 +75,22 @@ export async function searchMembers(params: MemberSearchParams) {
     countValues
   );
 
-  return { rows, total: countRows[0]?.total ?? 0 };
+  // API 응답 형태(phone 필드)는 기존과 동일하게 유지하도록, DB 접근 계층에서만 복호화한다.
+  const decryptedRows = rows.map(({ phone_enc, ...rest }) => ({ ...rest, phone: decryptPhone(phone_enc) }));
+
+  return { rows: decryptedRows, total: countRows[0]?.total ?? 0 };
 }
 
 export async function getMemberDetail(memberId: string) {
   const { rows } = await pool.query(
-    `SELECT member_id, name, birth_date, issue_date, status, phone, created_at, updated_at,
+    `SELECT member_id, name, birth_date, issue_date, status, phone_enc, created_at, updated_at,
             (photo_path IS NOT NULL) AS has_photo,
             (NOT must_reset_password AND password_hash IS NOT NULL) AS has_pin
      FROM members WHERE member_id = $1`,
     [memberId]
   );
-  const member = rows[0];
-  if (!member) return null;
+  const { phone_enc, ...member } = rows[0] ?? {};
+  if (!rows[0]) return null;
 
   const { rows: lastChange } = await pool.query(
     `SELECT action, old_value, new_value, created_at
@@ -84,7 +99,7 @@ export async function getMemberDetail(memberId: string) {
     [memberId]
   );
 
-  return { ...member, lastChange: lastChange[0] ?? null };
+  return { ...member, phone: decryptPhone(phone_enc), lastChange: lastChange[0] ?? null };
 }
 
 /**

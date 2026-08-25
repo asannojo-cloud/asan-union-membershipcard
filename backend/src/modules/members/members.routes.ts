@@ -16,6 +16,7 @@ import { detectImageType, ALLOWED_PHOTO_EXT } from "../photos/imageValidation";
 import { recordAudit } from "../audit/audit.service";
 import { parseFlexibleDate } from "../../utils/dateUtils";
 import { parsePhone } from "../../utils/phoneUtils";
+import { encryptPhone, decryptPhone, hashPhone, maskPhone } from "../../utils/phoneCrypto";
 import { searchMembers, getMemberDetail, getDashboardStats, suggestNextMemberId } from "./members.service";
 import { AppError } from "../../middleware/errorHandler";
 
@@ -215,22 +216,23 @@ membersRouter.post("/", (req, res, next) => {
         return res.status(409).json({ error: "이미 존재하는 회원번호입니다." });
       }
 
-      const phoneOwner = await pool.query(`SELECT member_id FROM members WHERE phone = $1`, [phoneParsed.normalized]);
+      const phoneHash = hashPhone(phoneParsed.normalized);
+      const phoneOwner = await pool.query(`SELECT member_id FROM members WHERE phone_hash = $1`, [phoneHash]);
       if (phoneOwner.rows.length > 0) {
         return res.status(409).json({ error: `이미 다른 회원(${phoneOwner.rows[0].member_id})에게 등록된 휴대폰번호입니다.` });
       }
 
       await pool.query(
-        `INSERT INTO members (member_id, name, birth_date, issue_date, phone)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [memberId, name, birth.iso, issue.iso, phoneParsed.normalized]
+        `INSERT INTO members (member_id, name, birth_date, issue_date, phone_enc, phone_hash)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [memberId, name, birth.iso, issue.iso, encryptPhone(phoneParsed.normalized), phoneHash]
       );
 
       await recordAudit({
         adminId: req.session.auth!.id,
         memberId,
         action: "create",
-        newValue: { name, birthDate: birth.iso, issueDate: issue.iso, phone: phoneParsed.normalized },
+        newValue: { name, birthDate: birth.iso, issueDate: issue.iso, phone: maskPhone(phoneParsed.normalized) },
       });
 
       if (req.file && !photoWarning) {
@@ -265,28 +267,37 @@ membersRouter.put("/:memberId", async (req, res) => {
   if (!before) return res.status(404).json({ error: "회원을 찾을 수 없습니다." });
 
   const updates: Record<string, string> = {};
-  if (parsed.data.name !== undefined) updates.name = parsed.data.name;
+  // 감사로그에는 실제 DB에 쓰는 값(updates)과 다르게, 전화번호는 마스킹된 값만 남긴다.
+  const auditNewValue: Record<string, string> = {};
+  if (parsed.data.name !== undefined) {
+    updates.name = parsed.data.name;
+    auditNewValue.name = parsed.data.name;
+  }
   if (parsed.data.birthDate !== undefined) {
     const r = parseFlexibleDate(parsed.data.birthDate);
     if (!r.ok) return res.status(400).json({ error: `생년월일 오류: ${r.error}` });
     updates.birth_date = r.iso;
+    auditNewValue.birthDate = r.iso;
   }
   if (parsed.data.issueDate !== undefined) {
     const r = parseFlexibleDate(parsed.data.issueDate);
     if (!r.ok) return res.status(400).json({ error: `발급일 오류: ${r.error}` });
     updates.issue_date = r.iso;
+    auditNewValue.issueDate = r.iso;
   }
   if (parsed.data.phone !== undefined) {
     const r = parsePhone(parsed.data.phone);
     if (!r.ok) return res.status(400).json({ error: `휴대폰번호 오류: ${r.error}` });
-    const owner = await pool.query(`SELECT member_id FROM members WHERE phone = $1 AND member_id != $2`, [
-      r.normalized,
+    const owner = await pool.query(`SELECT member_id FROM members WHERE phone_hash = $1 AND member_id != $2`, [
+      hashPhone(r.normalized),
       memberIdParsed.data,
     ]);
     if (owner.rows.length > 0) {
       return res.status(409).json({ error: `이미 다른 회원(${owner.rows[0].member_id})에게 등록된 휴대폰번호입니다.` });
     }
-    updates.phone = r.normalized;
+    updates.phone_enc = encryptPhone(r.normalized);
+    updates.phone_hash = hashPhone(r.normalized);
+    auditNewValue.phone = maskPhone(r.normalized) ?? "";
   }
 
   if (Object.keys(updates).length === 0) {
@@ -303,8 +314,13 @@ membersRouter.put("/:memberId", async (req, res) => {
     adminId: req.session.auth!.id,
     memberId: memberIdParsed.data,
     action: "update",
-    oldValue: { name: before.name, birthDate: before.birth_date, issueDate: before.issue_date, phone: before.phone },
-    newValue: updates,
+    oldValue: {
+      name: before.name,
+      birthDate: before.birth_date,
+      issueDate: before.issue_date,
+      phone: maskPhone(decryptPhone(before.phone_enc)),
+    },
+    newValue: auditNewValue,
   });
 
   res.json({ ok: true });
@@ -381,7 +397,7 @@ membersRouter.delete("/:memberId", async (req, res) => {
   if (!memberIdParsed.success) return res.status(400).json({ error: "회원번호 형식이 올바르지 않습니다." });
 
   const { rows } = await pool.query(
-    `SELECT name, birth_date::text, issue_date::text, status, phone, photo_path FROM members WHERE member_id = $1`,
+    `SELECT name, birth_date::text, issue_date::text, status, phone_enc, photo_path FROM members WHERE member_id = $1`,
     [memberIdParsed.data]
   );
   const member = rows[0];
@@ -397,7 +413,12 @@ membersRouter.delete("/:memberId", async (req, res) => {
     adminId: req.session.auth!.id,
     memberId: memberIdParsed.data,
     action: "delete",
-    oldValue: { name: member.name, birthDate: member.birth_date, issueDate: member.issue_date, phone: member.phone },
+    oldValue: {
+      name: member.name,
+      birthDate: member.birth_date,
+      issueDate: member.issue_date,
+      phone: maskPhone(decryptPhone(member.phone_enc)),
+    },
   });
 
   res.json({ ok: true });
@@ -418,7 +439,7 @@ membersRouter.post("/bulk-delete", async (req, res) => {
 
   for (const memberId of parsed.data.memberIds) {
     const { rows } = await pool.query(
-      `SELECT name, birth_date::text, issue_date::text, status, phone, photo_path FROM members WHERE member_id = $1`,
+      `SELECT name, birth_date::text, issue_date::text, status, phone_enc, photo_path FROM members WHERE member_id = $1`,
       [memberId]
     );
     const member = rows[0];
@@ -437,7 +458,12 @@ membersRouter.post("/bulk-delete", async (req, res) => {
       adminId: req.session.auth!.id,
       memberId,
       action: "delete",
-      oldValue: { name: member.name, birthDate: member.birth_date, issueDate: member.issue_date, phone: member.phone },
+      oldValue: {
+        name: member.name,
+        birthDate: member.birth_date,
+        issueDate: member.issue_date,
+        phone: maskPhone(decryptPhone(member.phone_enc)),
+      },
     });
     deleted.push(memberId);
   }
