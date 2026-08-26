@@ -15,6 +15,7 @@ import { processAndStorePhoto } from "../photos/photos.service";
 import { recordAudit } from "../audit/audit.service";
 import { AppError } from "../../middleware/errorHandler";
 import { encryptPhone, decryptPhone, hashPhone, maskPhone } from "../../utils/phoneCrypto";
+import { encryptBirthDate, decryptBirthDate, maskBirthDate } from "../../utils/dateCrypto";
 
 export const excelRouter = Router();
 excelRouter.use(adminGuard);
@@ -151,13 +152,16 @@ excelRouter.post("/validate", (req, res, next) => {
         zipErrors = result.errors;
       }
 
-      // 기존 회원 조회 (변경 여부 비교용) — phone은 암호화되어 있어 복호화해서 넘긴다.
-      const { rows: existingRowsEnc } = await pool.query<Omit<ExistingMember, "phone"> & { phone_enc: string | null }>(
-        `SELECT member_id, name, birth_date::text, issue_date::text, status, photo_path, phone_enc FROM members`
+      // 기존 회원 조회 (변경 여부 비교용) — phone/birth_date는 암호화되어 있어 복호화해서 넘긴다.
+      const { rows: existingRowsEnc } = await pool.query<
+        Omit<ExistingMember, "phone" | "birth_date"> & { phone_enc: string | null; birth_date_enc: string | null }
+      >(
+        `SELECT member_id, name, birth_date_enc, issue_date::text, status, photo_path, phone_enc FROM members`
       );
-      const existingRows: ExistingMember[] = existingRowsEnc.map(({ phone_enc, ...r }) => ({
+      const existingRows: ExistingMember[] = existingRowsEnc.map(({ phone_enc, birth_date_enc, ...r }) => ({
         ...r,
         phone: decryptPhone(phone_enc),
+        birth_date: decryptBirthDate(birth_date_enc)!,
       }));
       const existingMap = new Map(existingRows.map((r) => [r.member_id, r]));
 
@@ -269,14 +273,14 @@ excelRouter.post("/batches/:id/commit", async (req, res, next) => {
       if (row.changeType === "error" || !row.memberId) continue;
 
       if (row.changeType === "new") {
-        // row.phone은 validateRows에서 이미 필수값으로 검증됐다 (에러행은 위에서 continue됨).
+        // row.phone/row.birthDate는 validateRows에서 이미 필수값으로 검증됐다 (에러행은 위에서 continue됨).
         await client.query(
-          `INSERT INTO members (member_id, name, birth_date, issue_date, status, phone_enc, phone_hash)
+          `INSERT INTO members (member_id, name, birth_date_enc, issue_date, status, phone_enc, phone_hash)
            VALUES ($1,$2,$3,$4,$5,$6,$7)`,
           [
             row.memberId,
             row.name,
-            row.birthDate,
+            encryptBirthDate(row.birthDate!),
             row.issueDate,
             row.targetStatus ?? "active",
             encryptPhone(row.phone!),
@@ -289,22 +293,23 @@ excelRouter.post("/batches/:id/commit", async (req, res, next) => {
             memberId: row.memberId,
             batchId: id,
             action: "excel_create",
-            newValue: { name: row.name, birthDate: row.birthDate, issueDate: row.issueDate, phone: maskPhone(row.phone) },
+            newValue: { name: row.name, birthDate: maskBirthDate(row.birthDate), issueDate: row.issueDate, phone: maskPhone(row.phone) },
           },
           client
         );
       } else if (row.changeType === "update" || row.changeType === "inactive") {
         const { rows: beforeRows } = await client.query(
-          `SELECT name, birth_date::text, issue_date::text, status, phone_enc FROM members WHERE member_id = $1`,
+          `SELECT name, birth_date_enc, issue_date::text, status, phone_enc FROM members WHERE member_id = $1`,
           [row.memberId]
         );
         const before = beforeRows[0];
         const beforePhone = decryptPhone(before.phone_enc);
+        const beforeBirthDate = decryptBirthDate(before.birth_date_enc);
         // 휴대폰번호는 엑셀에 값이 없으면 기존 값을 그대로 유지한다 (실수로 지워지는 것을 방지)
         const nextPhone = row.phone ?? beforePhone!;
         await client.query(
-          `UPDATE members SET name = $1, birth_date = $2, issue_date = $3, status = $4, phone_enc = $5, phone_hash = $6 WHERE member_id = $7`,
-          [row.name, row.birthDate, row.issueDate, row.targetStatus ?? "active", encryptPhone(nextPhone), hashPhone(nextPhone), row.memberId]
+          `UPDATE members SET name = $1, birth_date_enc = $2, issue_date = $3, status = $4, phone_enc = $5, phone_hash = $6 WHERE member_id = $7`,
+          [row.name, encryptBirthDate(row.birthDate!), row.issueDate, row.targetStatus ?? "active", encryptPhone(nextPhone), hashPhone(nextPhone), row.memberId]
         );
         await recordAudit(
           {
@@ -312,8 +317,8 @@ excelRouter.post("/batches/:id/commit", async (req, res, next) => {
             memberId: row.memberId,
             batchId: id,
             action: row.changeType === "inactive" ? "excel_deactivate" : "excel_update",
-            oldValue: { name: before.name, birthDate: before.birth_date, issueDate: before.issue_date, status: before.status, phone: maskPhone(beforePhone) },
-            newValue: { name: row.name, birthDate: row.birthDate, issueDate: row.issueDate, status: row.targetStatus, phone: maskPhone(nextPhone) },
+            oldValue: { name: before.name, birthDate: maskBirthDate(beforeBirthDate), issueDate: before.issue_date, status: before.status, phone: maskPhone(beforePhone) },
+            newValue: { name: row.name, birthDate: maskBirthDate(row.birthDate), issueDate: row.issueDate, status: row.targetStatus, phone: maskPhone(nextPhone) },
           },
           client
         );

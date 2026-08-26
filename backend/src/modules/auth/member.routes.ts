@@ -6,6 +6,7 @@ import { streamPhotoOrDefault } from "../photos/photos.service";
 import { recordAudit } from "../audit/audit.service";
 import { parsePhone } from "../../utils/phoneUtils";
 import { hashPhone } from "../../utils/phoneCrypto";
+import { decryptBirthDate } from "../../utils/dateCrypto";
 import { isLocked, registerFailedAttempt, resetFailedAttempts, verifyPassword, hashPassword } from "./auth.service";
 
 export const memberAuthRouter = Router();
@@ -139,7 +140,7 @@ memberAuthRouter.post("/logout", (req, res) => {
 
 memberAuthRouter.get("/me", memberGuard, async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT name, birth_date, issue_date, photo_path FROM members WHERE id = $1 AND status = 'active'`,
+    `SELECT name, birth_date_enc, issue_date, photo_path FROM members WHERE id = $1 AND status = 'active'`,
     [req.session.auth!.id]
   );
   const member = rows[0];
@@ -148,7 +149,7 @@ memberAuthRouter.get("/me", memberGuard, async (req, res) => {
   }
   res.json({
     name: member.name,
-    birthDate: member.birth_date,
+    birthDate: decryptBirthDate(member.birth_date_enc),
     issueDate: member.issue_date,
     hasPhoto: !!member.photo_path,
   });

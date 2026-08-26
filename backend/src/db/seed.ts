@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import { pool } from "./pool";
 import { encryptPhone, hashPhone } from "../utils/phoneCrypto";
+import { encryptBirthDate } from "../utils/dateCrypto";
 
 /**
  * 개발/테스트용 시드 데이터.
@@ -30,10 +31,10 @@ async function seed() {
 
     for (const [memberId, name, birthDate, issueDate, phone] of members) {
       await client.query(
-        `INSERT INTO members (member_id, name, birth_date, issue_date, phone_enc, phone_hash)
+        `INSERT INTO members (member_id, name, birth_date_enc, issue_date, phone_enc, phone_hash)
          VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (member_id) DO NOTHING`,
-        [memberId, name, birthDate, issueDate, encryptPhone(phone), hashPhone(phone)]
+        [memberId, name, encryptBirthDate(birthDate), issueDate, encryptPhone(phone), hashPhone(phone)]
       );
     }
 

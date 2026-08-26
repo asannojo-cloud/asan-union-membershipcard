@@ -1,6 +1,7 @@
 import { pool } from "../../db/pool";
 import { parsePhone } from "../../utils/phoneUtils";
 import { decryptPhone, hashPhone } from "../../utils/phoneCrypto";
+import { decryptBirthDate } from "../../utils/dateCrypto";
 
 export interface MemberSearchParams {
   query?: string;
@@ -83,13 +84,13 @@ export async function searchMembers(params: MemberSearchParams) {
 
 export async function getMemberDetail(memberId: string) {
   const { rows } = await pool.query(
-    `SELECT member_id, name, birth_date, issue_date, status, phone_enc, created_at, updated_at,
+    `SELECT member_id, name, birth_date_enc, issue_date, status, phone_enc, created_at, updated_at,
             (photo_path IS NOT NULL) AS has_photo,
             (NOT must_reset_password AND password_hash IS NOT NULL) AS has_pin
      FROM members WHERE member_id = $1`,
     [memberId]
   );
-  const { phone_enc, ...member } = rows[0] ?? {};
+  const { phone_enc, birth_date_enc, ...member } = rows[0] ?? {};
   if (!rows[0]) return null;
 
   const { rows: lastChange } = await pool.query(
@@ -99,7 +100,12 @@ export async function getMemberDetail(memberId: string) {
     [memberId]
   );
 
-  return { ...member, phone: decryptPhone(phone_enc), lastChange: lastChange[0] ?? null };
+  return {
+    ...member,
+    phone: decryptPhone(phone_enc),
+    birth_date: decryptBirthDate(birth_date_enc),
+    lastChange: lastChange[0] ?? null,
+  };
 }
 
 /**
