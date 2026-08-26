@@ -2,6 +2,26 @@ import { pool } from "../../db/pool";
 import { parsePhone } from "../../utils/phoneUtils";
 import { decryptPhone, hashPhone } from "../../utils/phoneCrypto";
 import { decryptBirthDate } from "../../utils/dateCrypto";
+import { decryptName } from "../../utils/nameCrypto";
+
+// member_id는 "2026-1", "2026-10", "2026-2"처럼 "연도-일련번호" 형태라 문자열로
+// 그냥 정렬하면 "2026-10"이 "2026-2"보다 앞에 오는 등 순서가 뒤죽박죽으로 보인다
+// (2026-08-14 발견). 연도/일련번호를 숫자로 비교하고, 그 형식이 아닌 값은 맨 뒤로 보낸다.
+// 예전에는 이 정렬을 SQL ORDER BY로 했지만, 이름 암호화(2026-08-20 3단계)로 검색/정렬을
+// 애플리케이션 메모리에서 처리하게 되면서 이 비교 함수로 옮겼다.
+function compareMemberId(a: string, b: string): number {
+  const ma = a.match(/^(\d+)-(\d+)$/);
+  const mb = b.match(/^(\d+)-(\d+)$/);
+  if (ma && !mb) return -1;
+  if (!ma && mb) return 1;
+  if (ma && mb) {
+    const yearDiff = parseInt(ma[1], 10) - parseInt(mb[1], 10);
+    if (yearDiff !== 0) return yearDiff;
+    const serialDiff = parseInt(ma[2], 10) - parseInt(mb[2], 10);
+    if (serialDiff !== 0) return serialDiff;
+  }
+  return a < b ? -1 : a > b ? 1 : 0;
+}
 
 export interface MemberSearchParams {
   query?: string;
@@ -15,20 +35,10 @@ export async function searchMembers(params: MemberSearchParams) {
   const conditions: string[] = [];
   const values: unknown[] = [];
 
-  if (params.query) {
-    values.push(`%${params.query}%`);
-    const textCond = `(member_id ILIKE $${values.length} OR name ILIKE $${values.length})`;
-    // 전화번호는 암호화되어 있어 부분(ILIKE) 검색은 더 이상 불가능하다. 검색어가
-    // 전화번호 전체 형식으로 보이면, 해시로 정확히 일치하는 건만 추가로 매칭해준다
-    // (2026-08-20 전화번호 암호화 1단계 — "010-1234" 같은 일부 검색은 이제 안 됨).
-    const phoneParsed = parsePhone(params.query);
-    if (phoneParsed.ok) {
-      values.push(hashPhone(phoneParsed.normalized));
-      conditions.push(`(${textCond} OR phone_hash = $${values.length})`);
-    } else {
-      conditions.push(textCond);
-    }
-  }
+  // status/hasPhoto는 평문 컬럼이라 그대로 SQL로 거른다. 이름/전화번호는 암호화되어
+  // 있어 DB에서 직접 부분검색을 할 수 없으므로, 나머지(검색어 매칭·정렬·페이지네이션)는
+  // 전체를 복호화한 뒤 서버 메모리에서 처리한다 — 회원 수가 2000명 이하 규모라
+  // 성능 문제는 없다 (2026-08-20 이름 암호화 3단계로 검색 방식 변경).
   if (params.status) {
     values.push(params.status);
     conditions.push(`status = $${values.length}`);
@@ -40,57 +50,53 @@ export async function searchMembers(params: MemberSearchParams) {
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-  const offset = (params.page - 1) * params.pageSize;
 
-  // hasPhoto 조건은 바인딩 값 없이 리터럴(photo_path IS NULL 등)로만 들어가므로
-  // "조건 개수 == 바인딩 값 개수"가 더 이상 성립하지 않는다. 개수 대신 여기서 실제
-  // WHERE절에 쓰인 값의 개수를 스냅샷해서 count 쿼리에 정확히 그만큼만 넘긴다
-  // (안 그러면 플레이스홀더 수와 안 맞아 쿼리 자체가 오류난다, 2026-08-12 발견).
-  const whereValueCount = values.length;
-
-  values.push(params.pageSize);
-  const limitIdx = values.length;
-  values.push(offset);
-  const offsetIdx = values.length;
-
-  // member_id는 "2026-1", "2026-10", "2026-2"처럼 "연도-일련번호" 형태라 문자열로
-  // 그냥 정렬하면 "2026-10"이 "2026-2"보다 앞에 오는 등 순서가 뒤죽박죽으로 보인다
-  // (2026-08-14 회원관리 화면에서 순서가 이상하다는 지적으로 발견). 연도/일련번호를
-  // 숫자로 쪼개서 정렬하고, 그 형식이 아닌 회원번호는 맨 뒤로 보낸다.
   const { rows } = await pool.query(
-    `SELECT member_id, name, status, issue_date, phone_enc, (photo_path IS NOT NULL) AS has_photo
-     FROM members
-     ${where}
-     ORDER BY
-       (member_id ~ '^[0-9]+-[0-9]+$') DESC,
-       CASE WHEN member_id ~ '^[0-9]+-[0-9]+$' THEN split_part(member_id, '-', 1)::int END,
-       CASE WHEN member_id ~ '^[0-9]+-[0-9]+$' THEN split_part(member_id, '-', 2)::int END,
-       member_id
-     LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+    `SELECT member_id, name_enc, status, issue_date, phone_enc, phone_hash, (photo_path IS NOT NULL) AS has_photo
+     FROM members ${where}`,
     values
   );
 
-  const countValues = values.slice(0, whereValueCount);
-  const { rows: countRows } = await pool.query(
-    `SELECT COUNT(*)::int AS total FROM members ${where}`,
-    countValues
-  );
+  let decrypted = rows.map(({ name_enc, phone_enc, ...rest }) => ({
+    ...rest,
+    name: decryptName(name_enc),
+    phone: decryptPhone(phone_enc),
+  }));
 
-  // API 응답 형태(phone 필드)는 기존과 동일하게 유지하도록, DB 접근 계층에서만 복호화한다.
-  const decryptedRows = rows.map(({ phone_enc, ...rest }) => ({ ...rest, phone: decryptPhone(phone_enc) }));
+  if (params.query) {
+    const q = params.query.trim();
+    const qLower = q.toLowerCase();
+    // 전화번호 부분검색은 암호화 이후 더 이상 불가능하다. 검색어가 전화번호 전체
+    // 형식으로 보이면, 해시로 정확히 일치하는 건만 추가로 매칭해준다
+    // (2026-08-20 전화번호 암호화 1단계 — "010-1234" 같은 일부 검색은 이제 안 됨).
+    const phoneParsed = parsePhone(q);
+    const queryPhoneHash = phoneParsed.ok ? hashPhone(phoneParsed.normalized) : null;
+    decrypted = decrypted.filter(
+      (r) =>
+        r.member_id.toLowerCase().includes(qLower) ||
+        (r.name ?? "").toLowerCase().includes(qLower) ||
+        (queryPhoneHash !== null && r.phone_hash === queryPhoneHash)
+    );
+  }
 
-  return { rows: decryptedRows, total: countRows[0]?.total ?? 0 };
+  decrypted.sort((a, b) => compareMemberId(a.member_id, b.member_id));
+
+  const total = decrypted.length;
+  const offset = (params.page - 1) * params.pageSize;
+  const pageRows = decrypted.slice(offset, offset + params.pageSize).map(({ phone_hash, ...rest }) => rest);
+
+  return { rows: pageRows, total };
 }
 
 export async function getMemberDetail(memberId: string) {
   const { rows } = await pool.query(
-    `SELECT member_id, name, birth_date_enc, issue_date, status, phone_enc, created_at, updated_at,
+    `SELECT member_id, name_enc, birth_date_enc, issue_date, status, phone_enc, created_at, updated_at,
             (photo_path IS NOT NULL) AS has_photo,
             (NOT must_reset_password AND password_hash IS NOT NULL) AS has_pin
      FROM members WHERE member_id = $1`,
     [memberId]
   );
-  const { phone_enc, birth_date_enc, ...member } = rows[0] ?? {};
+  const { phone_enc, birth_date_enc, name_enc, ...member } = rows[0] ?? {};
   if (!rows[0]) return null;
 
   const { rows: lastChange } = await pool.query(
@@ -102,6 +108,7 @@ export async function getMemberDetail(memberId: string) {
 
   return {
     ...member,
+    name: decryptName(name_enc),
     phone: decryptPhone(phone_enc),
     birth_date: decryptBirthDate(birth_date_enc),
     lastChange: lastChange[0] ?? null,

@@ -18,6 +18,7 @@ import { parseFlexibleDate } from "../../utils/dateUtils";
 import { parsePhone } from "../../utils/phoneUtils";
 import { encryptPhone, decryptPhone, hashPhone, maskPhone } from "../../utils/phoneCrypto";
 import { encryptBirthDate, decryptBirthDate, maskBirthDate } from "../../utils/dateCrypto";
+import { encryptName, decryptName, maskName } from "../../utils/nameCrypto";
 import { searchMembers, getMemberDetail, getDashboardStats, suggestNextMemberId } from "./members.service";
 import { AppError } from "../../middleware/errorHandler";
 
@@ -224,16 +225,16 @@ membersRouter.post("/", (req, res, next) => {
       }
 
       await pool.query(
-        `INSERT INTO members (member_id, name, birth_date_enc, issue_date, phone_enc, phone_hash)
+        `INSERT INTO members (member_id, name_enc, birth_date_enc, issue_date, phone_enc, phone_hash)
          VALUES ($1, $2, $3, $4, $5, $6)`,
-        [memberId, name, encryptBirthDate(birth.iso), issue.iso, encryptPhone(phoneParsed.normalized), phoneHash]
+        [memberId, encryptName(name), encryptBirthDate(birth.iso), issue.iso, encryptPhone(phoneParsed.normalized), phoneHash]
       );
 
       await recordAudit({
         adminId: req.session.auth!.id,
         memberId,
         action: "create",
-        newValue: { name, birthDate: maskBirthDate(birth.iso), issueDate: issue.iso, phone: maskPhone(phoneParsed.normalized) },
+        newValue: { name: maskName(name), birthDate: maskBirthDate(birth.iso), issueDate: issue.iso, phone: maskPhone(phoneParsed.normalized) },
       });
 
       if (req.file && !photoWarning) {
@@ -271,8 +272,8 @@ membersRouter.put("/:memberId", async (req, res) => {
   // 감사로그에는 실제 DB에 쓰는 값(updates)과 다르게, 전화번호는 마스킹된 값만 남긴다.
   const auditNewValue: Record<string, string> = {};
   if (parsed.data.name !== undefined) {
-    updates.name = parsed.data.name;
-    auditNewValue.name = parsed.data.name;
+    updates.name_enc = encryptName(parsed.data.name);
+    auditNewValue.name = maskName(parsed.data.name) ?? "";
   }
   if (parsed.data.birthDate !== undefined) {
     const r = parseFlexibleDate(parsed.data.birthDate);
@@ -316,7 +317,7 @@ membersRouter.put("/:memberId", async (req, res) => {
     memberId: memberIdParsed.data,
     action: "update",
     oldValue: {
-      name: before.name,
+      name: maskName(decryptName(before.name_enc)),
       birthDate: maskBirthDate(decryptBirthDate(before.birth_date_enc)),
       issueDate: before.issue_date,
       phone: maskPhone(decryptPhone(before.phone_enc)),
@@ -398,7 +399,7 @@ membersRouter.delete("/:memberId", async (req, res) => {
   if (!memberIdParsed.success) return res.status(400).json({ error: "회원번호 형식이 올바르지 않습니다." });
 
   const { rows } = await pool.query(
-    `SELECT name, birth_date_enc, issue_date::text, status, phone_enc, photo_path FROM members WHERE member_id = $1`,
+    `SELECT name_enc, birth_date_enc, issue_date::text, status, phone_enc, photo_path FROM members WHERE member_id = $1`,
     [memberIdParsed.data]
   );
   const member = rows[0];
@@ -415,7 +416,7 @@ membersRouter.delete("/:memberId", async (req, res) => {
     memberId: memberIdParsed.data,
     action: "delete",
     oldValue: {
-      name: member.name,
+      name: maskName(decryptName(member.name_enc)),
       birthDate: maskBirthDate(decryptBirthDate(member.birth_date_enc)),
       issueDate: member.issue_date,
       phone: maskPhone(decryptPhone(member.phone_enc)),
@@ -440,7 +441,7 @@ membersRouter.post("/bulk-delete", async (req, res) => {
 
   for (const memberId of parsed.data.memberIds) {
     const { rows } = await pool.query(
-      `SELECT name, birth_date_enc, issue_date::text, status, phone_enc, photo_path FROM members WHERE member_id = $1`,
+      `SELECT name_enc, birth_date_enc, issue_date::text, status, phone_enc, photo_path FROM members WHERE member_id = $1`,
       [memberId]
     );
     const member = rows[0];
@@ -460,7 +461,7 @@ membersRouter.post("/bulk-delete", async (req, res) => {
       memberId,
       action: "delete",
       oldValue: {
-        name: member.name,
+        name: maskName(decryptName(member.name_enc)),
         birthDate: maskBirthDate(decryptBirthDate(member.birth_date_enc)),
         issueDate: member.issue_date,
         phone: maskPhone(decryptPhone(member.phone_enc)),

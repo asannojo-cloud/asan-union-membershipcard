@@ -7,6 +7,7 @@ import { recordAudit } from "../audit/audit.service";
 import { parsePhone } from "../../utils/phoneUtils";
 import { hashPhone } from "../../utils/phoneCrypto";
 import { decryptBirthDate } from "../../utils/dateCrypto";
+import { decryptName } from "../../utils/nameCrypto";
 import { isLocked, registerFailedAttempt, resetFailedAttempts, verifyPassword, hashPassword } from "./auth.service";
 
 export const memberAuthRouter = Router();
@@ -57,13 +58,13 @@ memberAuthRouter.post("/login", async (req, res) => {
   // 외워서 입력하긴 어려우므로 뒤의 소문자 한 글자는 생략해도 인식하도록 한다.
   const inputName = name.trim();
   const { rows } = await pool.query(
-    `SELECT id, member_id, name, status, password_hash, must_reset_password, failed_login_count, locked_until
+    `SELECT id, member_id, name_enc, status, password_hash, must_reset_password, failed_login_count, locked_until
      FROM members WHERE phone_hash = $1`,
     [hashPhone(phoneParsed.normalized)]
   );
-  const candidate = rows[0];
+  const candidate = rows[0] ? { ...rows[0], name: decryptName(rows[0].name_enc) } : undefined;
   const nameMatches =
-    candidate && (candidate.name === inputName || candidate.name.replace(/[a-z]$/, "") === inputName);
+    candidate && (candidate.name === inputName || candidate.name?.replace(/[a-z]$/, "") === inputName);
   const member = nameMatches ? candidate : undefined;
 
   if (!member) {
@@ -140,7 +141,7 @@ memberAuthRouter.post("/logout", (req, res) => {
 
 memberAuthRouter.get("/me", memberGuard, async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT name, birth_date_enc, issue_date, photo_path FROM members WHERE id = $1 AND status = 'active'`,
+    `SELECT name_enc, birth_date_enc, issue_date, photo_path FROM members WHERE id = $1 AND status = 'active'`,
     [req.session.auth!.id]
   );
   const member = rows[0];
@@ -148,7 +149,7 @@ memberAuthRouter.get("/me", memberGuard, async (req, res) => {
     return res.status(401).json({ error: "세션이 만료되었거나 계정을 사용할 수 없습니다." });
   }
   res.json({
-    name: member.name,
+    name: decryptName(member.name_enc),
     birthDate: decryptBirthDate(member.birth_date_enc),
     issueDate: member.issue_date,
     hasPhoto: !!member.photo_path,
