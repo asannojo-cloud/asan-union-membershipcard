@@ -20,12 +20,12 @@ function VanIcon() {
 const MEMBER_SERVICES = [
   {
     label: "협약기관 검색",
-    url: "https://asan-union-partners.onrender.com",
+    url: "https://partners.asancityunion.com",
     icon: <AgreementIcon />,
   },
   {
     label: "차량대여사업",
-    url: "https://asan-union-carrental.onrender.com/",
+    url: "https://carrent.asancityunion.com",
     icon: <VanIcon />,
   },
 ];
