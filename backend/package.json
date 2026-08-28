@@ -13,8 +13,8 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1109.0",
-    "adm-zip": "^0.5.16",
-    "bcrypt": "^5.1.1",
+    "adm-zip": "^0.6.0",
+    "bcrypt": "^6.0.0",
     "connect-pg-simple": "^10.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -27,9 +27,9 @@
     "otplib": "^13.5.0",
     "pg": "^8.13.1",
     "qrcode": "^1.5.4",
-    "sharp": "^0.33.5",
+    "sharp": "^0.35.4",
     "uuid": "^11.0.3",
-    "xlsx": "^0.18.5",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "^3.24.1"
   },
   "devDependencies": {

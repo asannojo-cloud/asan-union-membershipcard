@@ -17,9 +17,9 @@
     "seed": "npm run seed --workspace backend"
   },
   "allowScripts": {
-    "bcrypt@5.1.1": true,
+    "bcrypt@6.0.0": true,
     "esbuild@0.28.2": true,
     "esbuild@0.25.12": true,
-    "sharp@0.33.5": true
+    "sharp@0.35.4": true
   }
 }
