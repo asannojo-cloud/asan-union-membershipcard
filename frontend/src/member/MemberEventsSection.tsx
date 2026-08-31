@@ -59,9 +59,11 @@ export default function MemberEventsSection() {
       await loadEvents();
       setApplyFormId(null);
       setComment("");
-      if (result.waitlisted) {
-        alert("정원이 마감되어 대기자로 접수되었습니다. 자리가 나면 순서대로 확정 처리됩니다.");
-      }
+      alert(
+        result.waitlisted
+          ? "정원이 마감되어 대기자로 접수되었습니다. 자리가 나면 순서대로 확정 처리됩니다."
+          : "신청되었습니다."
+      );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "신청 중 오류가 발생했습니다.");
     } finally {
