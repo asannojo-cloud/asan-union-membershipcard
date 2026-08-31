@@ -32,7 +32,12 @@ export default function MemberLayout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
-      <header className="relative bg-blue-800 text-white py-3 font-semibold tracking-wide flex items-center justify-center gap-2">
+      {/* 모바일(특히 PWA로 설치해 전체화면으로 쓸 때)에서는 상단 헤더가 상태표시줄(시간/와이파이/배터리)
+          바로 밑에 붙어서 답답해 보인다는 의견이 있어, 모바일에서만 위쪽 여백을 넉넉히 준다.
+          env(safe-area-inset-top)은 노치/상태표시줄이 있는 기기에서 그 높이만큼 추가로 확보해준다
+          (index.html의 viewport-fit=cover가 있어야 값이 0이 아니게 적용됨). sm 이상(데스크톱/태블릿)에서는
+          원래 여백으로 되돌린다. */}
+      <header className="relative bg-blue-800 text-white pb-3 pt-[calc(env(safe-area-inset-top)+1.25rem)] sm:pt-3 font-semibold tracking-wide flex items-center justify-center gap-2">
         <img src="/union-logo.png" alt="" className="h-8 w-8 object-contain" />
         <span>아산시공무원노동조합</span>
         <Link
