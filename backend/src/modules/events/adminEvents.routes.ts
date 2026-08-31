@@ -31,12 +31,12 @@ const imageUpload = multer({
 adminEventsRouter.get("/", async (req, res) => {
   const { rows } = await pool.query(`
     SELECT e.id, e.title, e.description, e.status, (e.image_path IS NOT NULL) AS has_image,
-           e.application_prompt, e.image_position_y, e.capacity,
+           e.application_prompt, e.image_position_y, e.capacity, e.is_visible, e.display_order,
            e.created_at,
            (SELECT COUNT(*)::int FROM union_event_applications a WHERE a.event_id = e.id) AS applicant_count,
            (SELECT COUNT(*)::int FROM union_event_applications a WHERE a.event_id = e.id AND a.status = 'waitlisted') AS waitlisted_count
     FROM union_events e
-    ORDER BY e.created_at DESC
+    ORDER BY e.display_order ASC NULLS LAST, e.created_at DESC
   `);
   res.json({ items: rows });
 });
@@ -141,12 +141,27 @@ const capacitySchema = z
   )
   .transform((v) => (v === undefined || v.trim() === "" ? null : parseInt(v, 10)));
 
+// 체크박스 값은 FormData로 오면서 "true"/"false" 문자열이 된다.
+const isVisibleSchema = z
+  .enum(["true", "false"])
+  .optional()
+  .transform((v) => (v === undefined ? undefined : v === "true"));
+
+// 회원 화면 표출 순서 — 낮을수록 먼저 표시. 빈 값이면 순서 미지정(NULL, 최신순으로 밀림).
+const displayOrderSchema = z
+  .string()
+  .optional()
+  .refine((v) => v === undefined || v.trim() === "" || /^-?\d+$/.test(v.trim()), "순서는 숫자로 입력해주세요.")
+  .transform((v) => (v === undefined || v.trim() === "" ? null : parseInt(v, 10)));
+
 const createSchema = z.object({
   title: z.string().min(1, "이벤트명을 입력해주세요.").max(100),
   description: z.string().max(2000).optional(),
   applicationPrompt: applicationPromptSchema.optional(),
   imagePositionY: imagePositionY.optional(),
   capacity: capacitySchema,
+  isVisible: isVisibleSchema,
+  displayOrder: displayOrderSchema,
 });
 
 adminEventsRouter.post("/", (req, res, next) => {
@@ -157,21 +172,25 @@ adminEventsRouter.post("/", (req, res, next) => {
       if (!parsed.success) {
         return res.status(400).json({ error: "입력값을 확인해주세요.", details: parsed.error.flatten() });
       }
-      const { title, description, applicationPrompt, imagePositionY, capacity } = parsed.data;
+      const { title, description, applicationPrompt, imagePositionY, capacity, isVisible, displayOrder } =
+        parsed.data;
 
       if (req.file && !detectImageType(req.file.buffer)) {
         return res.status(400).json({ error: "이미지 파일이 손상되었거나 지원하지 않는 형식입니다." });
       }
 
       const { rows } = await pool.query(
-        `INSERT INTO union_events (title, description, application_prompt, image_position_y, capacity)
-         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+        `INSERT INTO union_events
+           (title, description, application_prompt, image_position_y, capacity, is_visible, display_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
         [
           title,
           description ?? null,
           applicationPrompt || DEFAULT_APPLICATION_PROMPT,
           imagePositionY ?? 50,
           capacity,
+          isVisible ?? true,
+          displayOrder,
         ]
       );
       const id = rows[0].id;
@@ -201,6 +220,8 @@ const updateSchema = z.object({
   applicationPrompt: applicationPromptSchema.optional(),
   imagePositionY: imagePositionY.optional(),
   capacity: capacitySchema,
+  isVisible: isVisibleSchema,
+  displayOrder: displayOrderSchema,
 });
 
 adminEventsRouter.put("/:id", (req, res, next) => {
@@ -216,13 +237,15 @@ adminEventsRouter.put("/:id", (req, res, next) => {
       const { rows } = await pool.query(`SELECT id FROM union_events WHERE id = $1`, [id]);
       if (!rows[0]) return res.status(404).json({ error: "이벤트를 찾을 수 없습니다." });
 
-      const updates: Record<string, string | number | null> = {};
+      const updates: Record<string, string | number | boolean | null> = {};
       if (parsed.data.title !== undefined) updates.title = parsed.data.title;
       if (parsed.data.description !== undefined) updates.description = parsed.data.description;
       if (parsed.data.status !== undefined) updates.status = parsed.data.status;
       if (parsed.data.applicationPrompt !== undefined) updates.application_prompt = parsed.data.applicationPrompt;
       if (parsed.data.imagePositionY !== undefined) updates.image_position_y = parsed.data.imagePositionY;
       if (req.body.capacity !== undefined) updates.capacity = parsed.data.capacity;
+      if (parsed.data.isVisible !== undefined) updates.is_visible = parsed.data.isVisible;
+      if (req.body.displayOrder !== undefined) updates.display_order = parsed.data.displayOrder;
 
       if (req.file && !detectImageType(req.file.buffer)) {
         return res.status(400).json({ error: "이미지 파일이 손상되었거나 지원하지 않는 형식입니다." });

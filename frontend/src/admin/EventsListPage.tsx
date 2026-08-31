@@ -11,6 +11,8 @@ interface EventItem {
   application_prompt: string;
   image_position_y: number;
   capacity: number | null;
+  is_visible: boolean;
+  display_order: number | null;
   applicant_count: number;
   waitlisted_count: number;
   created_at: string;
@@ -28,6 +30,8 @@ export default function EventsListPage() {
   const [applicationPrompt, setApplicationPrompt] = useState<string>(PROMPT_OPTIONS[0]);
   const [imagePositionY, setImagePositionY] = useState(50);
   const [capacity, setCapacity] = useState("");
+  const [isVisible, setIsVisible] = useState(true);
+  const [displayOrder, setDisplayOrder] = useState("");
   const [status, setStatus] = useState<"open" | "closed">("open");
   const [image, setImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
@@ -86,6 +90,8 @@ export default function EventsListPage() {
     setApplicationPrompt(PROMPT_OPTIONS[0]);
     setImagePositionY(50);
     setCapacity("");
+    setIsVisible(true);
+    setDisplayOrder("");
     setStatus("open");
     setImage(null);
     setExistingHasImage(false);
@@ -105,6 +111,8 @@ export default function EventsListPage() {
     setApplicationPrompt(ev.application_prompt || PROMPT_OPTIONS[0]);
     setImagePositionY(ev.image_position_y ?? 50);
     setCapacity(ev.capacity !== null ? String(ev.capacity) : "");
+    setIsVisible(ev.is_visible);
+    setDisplayOrder(ev.display_order !== null ? String(ev.display_order) : "");
     setStatus(ev.status);
     setImage(null);
     setExistingHasImage(ev.has_image);
@@ -127,6 +135,8 @@ export default function EventsListPage() {
       form.append("applicationPrompt", applicationPrompt);
       form.append("imagePositionY", String(imagePositionY));
       form.append("capacity", capacity);
+      form.append("isVisible", String(isVisible));
+      form.append("displayOrder", displayOrder);
       if (image) form.append("image", image);
 
       if (formMode === "create") {
@@ -280,6 +290,28 @@ export default function EventsListPage() {
               정원을 채운 뒤 신청하는 회원은 대기자로 접수되고, 그 사실이 화면에 안내됩니다.
             </p>
           </div>
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-slate-700 mb-1">표출 순서 (선택)</label>
+              <input
+                type="number"
+                value={displayOrder}
+                onChange={(e) => setDisplayOrder(e.target.value)}
+                placeholder="숫자가 낮을수록 먼저 표시"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              />
+              <p className="text-xs text-slate-400 mt-1">비워두면 최신 등록순으로 표시됩니다.</p>
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={isVisible}
+              onChange={(e) => setIsVisible(e.target.checked)}
+              className="rounded border-slate-300"
+            />
+            회원 화면에 표출 (체크 해제하면 회원 화면에서 완전히 숨겨집니다)
+          </label>
           {typeof formMode === "number" && (
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input
@@ -333,6 +365,11 @@ export default function EventsListPage() {
                   >
                     {ev.status === "open" ? "신청가능" : "마감"}
                   </span>
+                  {!ev.is_visible && (
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-50 text-red-600">
+                      회원화면 숨김
+                    </span>
+                  )}
                 </div>
                 {ev.description && <p className="text-xs text-slate-500 line-clamp-2 mb-2">{ev.description}</p>}
                 {ev.capacity !== null && (

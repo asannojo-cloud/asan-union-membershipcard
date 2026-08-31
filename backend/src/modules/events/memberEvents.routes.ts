@@ -16,7 +16,8 @@ memberEventsRouter.get("/", async (req, res) => {
             a.status AS my_status
      FROM union_events e
      LEFT JOIN union_event_applications a ON a.event_id = e.id AND a.member_id = $1
-     ORDER BY e.created_at DESC`,
+     WHERE e.is_visible = true
+     ORDER BY e.display_order ASC NULLS LAST, e.created_at DESC`,
     [req.session.auth!.id]
   );
   res.json({ items: rows });
