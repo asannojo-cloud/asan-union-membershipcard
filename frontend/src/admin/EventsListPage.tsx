@@ -178,21 +178,26 @@ export default function EventsListPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">신청 시 요청할 문구</label>
-            <select
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              신청 시 요청할 문구 (직접 입력하거나 목록에서 선택)
+            </label>
+            <input
               value={applicationPrompt}
               onChange={(e) => setApplicationPrompt(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
-            >
+              list="prompt-presets"
+              placeholder="예: 신청사유"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              maxLength={200}
+              required
+            />
+            <datalist id="prompt-presets">
               {PROMPT_OPTIONS.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
+                <option key={p} value={p} />
               ))}
-            </select>
+            </datalist>
             <p className="text-xs text-slate-400 mt-1">
               {applicationPrompt === "없음"
-                ? "회원이 \"참여하기\"를 누르면 입력창 없이 바로 신청 처리됩니다."
+                ? "\"없음\"으로 두면 회원 화면에 입력창 없이 바로 신청 처리됩니다."
                 : "회원이 \"참여하기\"를 누르면 이 문구와 함께 필수 입력창이 나타납니다."}
             </p>
           </div>

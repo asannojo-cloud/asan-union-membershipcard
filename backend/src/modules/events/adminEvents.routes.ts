@@ -78,10 +78,12 @@ adminEventsRouter.get("/:id/applications", async (req, res) => {
 // 프론트엔드에서 제공하는 자주 쓰는 문구 중 골라 쓸 수 있다 — 값 자체는 그냥 텍스트라
 // 어느 쪽이든 서버는 동일하게 처리한다.
 const imagePositionY = z.coerce.number().int().min(0).max(100);
-// "없음"을 고르면 회원 화면에 입력창 자체가 뜨지 않고 바로 신청 처리된다 (memberEvents.routes.ts 참고).
-export const APPLICATION_PROMPT_OPTIONS = ["신청사유", "아공노에 바란다", "신규시책", "없음"] as const;
+// 관리자가 자주 쓰는 문구를 고르거나(프론트엔드 datalist 제안) 직접 타이핑할 수도 있다 —
+// 값 자체는 자유 텍스트라 서버는 특정 목록에 있는지 검사하지 않는다. 다만 "없음"이라는
+// 값을 그대로 쓰면 회원 화면에 입력창 자체가 뜨지 않고 바로 신청 처리된다
+// (memberEvents.routes.ts 참고).
 const DEFAULT_APPLICATION_PROMPT = "신청사유";
-const applicationPromptSchema = z.enum(APPLICATION_PROMPT_OPTIONS);
+const applicationPromptSchema = z.string().min(1).max(200);
 
 const createSchema = z.object({
   title: z.string().min(1, "이벤트명을 입력해주세요.").max(100),
