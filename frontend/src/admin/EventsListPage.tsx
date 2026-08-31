@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../shared/api";
 
 interface EventItem {
@@ -10,7 +10,9 @@ interface EventItem {
   has_image: boolean;
   application_prompt: string;
   image_position_y: number;
+  capacity: number | null;
   applicant_count: number;
+  waitlisted_count: number;
   created_at: string;
 }
 
@@ -25,6 +27,7 @@ export default function EventsListPage() {
   const [description, setDescription] = useState("");
   const [applicationPrompt, setApplicationPrompt] = useState<string>(PROMPT_OPTIONS[0]);
   const [imagePositionY, setImagePositionY] = useState(50);
+  const [capacity, setCapacity] = useState("");
   const [status, setStatus] = useState<"open" | "closed">("open");
   const [image, setImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
@@ -34,18 +37,32 @@ export default function EventsListPage() {
   const [listError, setListError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const location = useLocation();
+  const navigate = useNavigate();
+
   async function load() {
     try {
       const data = await api.get<{ items: EventItem[] }>("/admin/events");
       setEvents(data.items);
+      return data.items;
     } catch (err) {
       setListError(err instanceof ApiError ? err.message : "목록을 불러오지 못했습니다.");
       setEvents([]);
+      return [];
     }
   }
 
   useEffect(() => {
-    load();
+    load().then((items) => {
+      // 신청자 목록 화면에서 "이벤트명 클릭 → 수정" 으로 넘어온 경우, 그 이벤트의 수정 폼을 바로 연다.
+      const openEditId = (location.state as { openEditId?: number } | null)?.openEditId;
+      if (openEditId !== undefined) {
+        const ev = items.find((e) => e.id === openEditId);
+        if (ev) openEditForm(ev);
+        navigate(location.pathname, { replace: true, state: null });
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 새로 선택한 파일의 미리보기를 만든다. helmet 기본 CSP의 img-src가 'self' data:까지만
@@ -68,6 +85,7 @@ export default function EventsListPage() {
     setDescription("");
     setApplicationPrompt(PROMPT_OPTIONS[0]);
     setImagePositionY(50);
+    setCapacity("");
     setStatus("open");
     setImage(null);
     setExistingHasImage(false);
@@ -86,6 +104,7 @@ export default function EventsListPage() {
     setDescription(ev.description ?? "");
     setApplicationPrompt(ev.application_prompt || PROMPT_OPTIONS[0]);
     setImagePositionY(ev.image_position_y ?? 50);
+    setCapacity(ev.capacity !== null ? String(ev.capacity) : "");
     setStatus(ev.status);
     setImage(null);
     setExistingHasImage(ev.has_image);
@@ -107,6 +126,7 @@ export default function EventsListPage() {
       form.append("description", description);
       form.append("applicationPrompt", applicationPrompt);
       form.append("imagePositionY", String(imagePositionY));
+      form.append("capacity", capacity);
       if (image) form.append("image", image);
 
       if (formMode === "create") {
@@ -246,6 +266,20 @@ export default function EventsListPage() {
               </div>
             </div>
           )}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">신청 정원 (선택)</label>
+            <input
+              type="number"
+              min={1}
+              value={capacity}
+              onChange={(e) => setCapacity(e.target.value)}
+              placeholder="비워두면 정원 제한 없음"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+            <p className="text-xs text-slate-400 mt-1">
+              정원을 채운 뒤 신청하는 회원은 대기자로 접수되고, 그 사실이 화면에 안내됩니다.
+            </p>
+          </div>
           {typeof formMode === "number" && (
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input
@@ -301,6 +335,12 @@ export default function EventsListPage() {
                   </span>
                 </div>
                 {ev.description && <p className="text-xs text-slate-500 line-clamp-2 mb-2">{ev.description}</p>}
+                {ev.capacity !== null && (
+                  <p className="text-xs text-slate-400 mb-2">
+                    정원 {ev.capacity}명 중 {ev.applicant_count - ev.waitlisted_count}명 신청
+                    {ev.waitlisted_count > 0 && ` (대기 ${ev.waitlisted_count}명)`}
+                  </p>
+                )}
                 <div className="flex items-center gap-3 text-xs">
                   <Link to={`/admin/events/${ev.id}`} className="text-blue-700 font-medium underline">
                     신청자 {ev.applicant_count}명 보기

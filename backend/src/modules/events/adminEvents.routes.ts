@@ -1,6 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { z } from "zod";
+import * as XLSX from "xlsx";
 import { pool } from "../../db/pool";
 import { env } from "../../config/env";
 import { adminGuard } from "../../middleware/guards";
@@ -30,9 +31,10 @@ const imageUpload = multer({
 adminEventsRouter.get("/", async (req, res) => {
   const { rows } = await pool.query(`
     SELECT e.id, e.title, e.description, e.status, (e.image_path IS NOT NULL) AS has_image,
-           e.application_prompt, e.image_position_y,
+           e.application_prompt, e.image_position_y, e.capacity,
            e.created_at,
-           (SELECT COUNT(*)::int FROM union_event_applications a WHERE a.event_id = e.id) AS applicant_count
+           (SELECT COUNT(*)::int FROM union_event_applications a WHERE a.event_id = e.id) AS applicant_count,
+           (SELECT COUNT(*)::int FROM union_event_applications a WHERE a.event_id = e.id AND a.status = 'waitlisted') AS waitlisted_count
     FROM union_events e
     ORDER BY e.created_at DESC
   `);
@@ -56,11 +58,11 @@ adminEventsRouter.get("/:id/applications", async (req, res) => {
   if (!eventRows[0]) return res.status(404).json({ error: "이벤트를 찾을 수 없습니다." });
 
   const { rows } = await pool.query(
-    `SELECT m.member_id, m.name_enc, m.phone_enc, a.applied_at, a.comment
+    `SELECT m.member_id, m.name_enc, m.phone_enc, a.applied_at, a.comment, a.status
      FROM union_event_applications a
      JOIN members m ON m.id = a.member_id
      WHERE a.event_id = $1
-     ORDER BY a.applied_at ASC`,
+     ORDER BY (a.status = 'waitlisted'), a.applied_at ASC`,
     [id]
   );
   const applicants = rows.map((r) => ({
@@ -69,9 +71,52 @@ adminEventsRouter.get("/:id/applications", async (req, res) => {
     phone: decryptPhone(r.phone_enc),
     appliedAt: r.applied_at,
     comment: r.comment,
+    status: r.status,
   }));
 
   res.json({ event: eventRows[0], applicants });
+});
+
+// 신청자 명단 Excel 다운로드.
+adminEventsRouter.get("/:id/applications/excel", async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: "잘못된 요청입니다." });
+
+  const { rows: eventRows } = await pool.query(`SELECT id, title FROM union_events WHERE id = $1`, [id]);
+  const event = eventRows[0];
+  if (!event) return res.status(404).json({ error: "이벤트를 찾을 수 없습니다." });
+
+  const { rows } = await pool.query(
+    `SELECT m.member_id, m.name_enc, m.phone_enc, a.applied_at, a.comment, a.status
+     FROM union_event_applications a
+     JOIN members m ON m.id = a.member_id
+     WHERE a.event_id = $1
+     ORDER BY (a.status = 'waitlisted'), a.applied_at ASC`,
+    [id]
+  );
+
+  const headerRow = ["회원번호", "이름", "휴대폰번호", "신청일시", "상태", "신청사유"];
+  const dataRows = rows.map((r) => [
+    r.member_id,
+    decryptName(r.name_enc),
+    decryptPhone(r.phone_enc),
+    new Date(r.applied_at).toLocaleString("ko-KR"),
+    r.status === "waitlisted" ? "대기" : "확정",
+    r.comment ?? "",
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([headerRow, ...dataRows]);
+  ws["!cols"] = [{ wch: 10 }, { wch: 10 }, { wch: 15 }, { wch: 20 }, { wch: 8 }, { wch: 40 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "신청자명단");
+  const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+
+  const filename = `${event.title}_신청자명단.xlsx`;
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="applicants.xlsx"; filename*=UTF-8''${encodeURIComponent(filename)}`
+  );
+  res.send(buffer);
 });
 
 // 신청 시 회원에게 보여줄 질문 문구는 관리자가 이벤트마다 직접 입력하거나(자유 텍스트),
@@ -85,11 +130,23 @@ const imagePositionY = z.coerce.number().int().min(0).max(100);
 const DEFAULT_APPLICATION_PROMPT = "신청사유";
 const applicationPromptSchema = z.string().min(1).max(200);
 
+// 정원 — 빈 값이면 제한 없음(null), 아니면 1 이상의 정수여야 한다.
+// FormData로 오다 보니 항상 문자열이라 직접 파싱한다.
+const capacitySchema = z
+  .string()
+  .optional()
+  .refine(
+    (v) => v === undefined || v.trim() === "" || (/^\d+$/.test(v.trim()) && parseInt(v, 10) > 0),
+    "정원은 1 이상의 숫자로 입력해주세요."
+  )
+  .transform((v) => (v === undefined || v.trim() === "" ? null : parseInt(v, 10)));
+
 const createSchema = z.object({
   title: z.string().min(1, "이벤트명을 입력해주세요.").max(100),
   description: z.string().max(2000).optional(),
   applicationPrompt: applicationPromptSchema.optional(),
   imagePositionY: imagePositionY.optional(),
+  capacity: capacitySchema,
 });
 
 adminEventsRouter.post("/", (req, res, next) => {
@@ -100,20 +157,21 @@ adminEventsRouter.post("/", (req, res, next) => {
       if (!parsed.success) {
         return res.status(400).json({ error: "입력값을 확인해주세요.", details: parsed.error.flatten() });
       }
-      const { title, description, applicationPrompt, imagePositionY } = parsed.data;
+      const { title, description, applicationPrompt, imagePositionY, capacity } = parsed.data;
 
       if (req.file && !detectImageType(req.file.buffer)) {
         return res.status(400).json({ error: "이미지 파일이 손상되었거나 지원하지 않는 형식입니다." });
       }
 
       const { rows } = await pool.query(
-        `INSERT INTO union_events (title, description, application_prompt, image_position_y)
-         VALUES ($1, $2, $3, $4) RETURNING id`,
+        `INSERT INTO union_events (title, description, application_prompt, image_position_y, capacity)
+         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
         [
           title,
           description ?? null,
           applicationPrompt || DEFAULT_APPLICATION_PROMPT,
           imagePositionY ?? 50,
+          capacity,
         ]
       );
       const id = rows[0].id;
@@ -142,6 +200,7 @@ const updateSchema = z.object({
   status: z.enum(["open", "closed"]).optional(),
   applicationPrompt: applicationPromptSchema.optional(),
   imagePositionY: imagePositionY.optional(),
+  capacity: capacitySchema,
 });
 
 adminEventsRouter.put("/:id", (req, res, next) => {
@@ -157,12 +216,13 @@ adminEventsRouter.put("/:id", (req, res, next) => {
       const { rows } = await pool.query(`SELECT id FROM union_events WHERE id = $1`, [id]);
       if (!rows[0]) return res.status(404).json({ error: "이벤트를 찾을 수 없습니다." });
 
-      const updates: Record<string, string | number> = {};
+      const updates: Record<string, string | number | null> = {};
       if (parsed.data.title !== undefined) updates.title = parsed.data.title;
       if (parsed.data.description !== undefined) updates.description = parsed.data.description;
       if (parsed.data.status !== undefined) updates.status = parsed.data.status;
       if (parsed.data.applicationPrompt !== undefined) updates.application_prompt = parsed.data.applicationPrompt;
       if (parsed.data.imagePositionY !== undefined) updates.image_position_y = parsed.data.imagePositionY;
+      if (req.body.capacity !== undefined) updates.capacity = parsed.data.capacity;
 
       if (req.file && !detectImageType(req.file.buffer)) {
         return res.status(400).json({ error: "이미지 파일이 손상되었거나 지원하지 않는 형식입니다." });

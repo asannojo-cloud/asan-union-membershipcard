@@ -9,7 +9,8 @@ interface UnionEvent {
   has_image: boolean;
   application_prompt: string;
   image_position_y: number;
-  applied: boolean;
+  capacity: number | null;
+  my_status: "confirmed" | "waitlisted" | null;
 }
 
 /** 노조 행사 참여 — 관리자가 등록한 조합사업(이벤트)을 보여주고, 로그인된 본인 정보로 참여 신청/취소한다. */
@@ -44,13 +45,17 @@ export default function MemberEventsSection() {
     setError(null);
     setBusyId(id);
     try {
-      await api.post(
+      const result = await api.post<{ ok: true; waitlisted: boolean }>(
         `/member/events/${id}/apply`,
         commentValue !== null ? { comment: commentValue.trim() } : undefined
       );
-      setEvents((prev) => prev && prev.map((e) => (e.id === id ? { ...e, applied: true } : e)));
+      const newStatus = result.waitlisted ? "waitlisted" : "confirmed";
+      setEvents((prev) => prev && prev.map((e) => (e.id === id ? { ...e, my_status: newStatus } : e)));
       setApplyFormId(null);
       setComment("");
+      if (result.waitlisted) {
+        alert("정원이 마감되어 대기자로 접수되었습니다. 자리가 나면 순서대로 확정 처리됩니다.");
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "신청 중 오류가 발생했습니다.");
     } finally {
@@ -64,7 +69,7 @@ export default function MemberEventsSection() {
     setBusyId(id);
     try {
       await api.delete(`/member/events/${id}/apply`);
-      setEvents((prev) => prev && prev.map((e) => (e.id === id ? { ...e, applied: false } : e)));
+      setEvents((prev) => prev && prev.map((e) => (e.id === id ? { ...e, my_status: null } : e)));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "취소 중 오류가 발생했습니다.");
     } finally {
@@ -115,11 +120,17 @@ export default function MemberEventsSection() {
                   <p className="text-xs text-slate-500 whitespace-pre-wrap mb-3">{event.description}</p>
                 )}
 
-                {event.applied ? (
+                {event.my_status !== null ? (
                   <div className="flex items-center gap-2">
-                    <span className="inline-block rounded-lg bg-green-50 text-green-700 text-sm font-medium px-4 py-2">
-                      참여 완료
-                    </span>
+                    {event.my_status === "waitlisted" ? (
+                      <span className="inline-block rounded-lg bg-amber-50 text-amber-700 text-sm font-medium px-4 py-2">
+                        대기 중
+                      </span>
+                    ) : (
+                      <span className="inline-block rounded-lg bg-green-50 text-green-700 text-sm font-medium px-4 py-2">
+                        참여 완료
+                      </span>
+                    )}
                     <button
                       type="button"
                       onClick={() => handleCancel(event.id)}
