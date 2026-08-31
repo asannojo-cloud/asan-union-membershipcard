@@ -11,6 +11,7 @@ interface UnionEvent {
   image_position_y: number;
   capacity: number | null;
   my_status: "confirmed" | "waitlisted" | null;
+  confirmed_count: number;
 }
 
 /** 노조 행사 참여 — 관리자가 등록한 조합사업(이벤트)을 보여주고, 로그인된 본인 정보로 참여 신청/취소한다. */
@@ -22,11 +23,17 @@ export default function MemberEventsSection() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  async function loadEvents() {
+    try {
+      const data = await api.get<{ items: UnionEvent[] }>("/member/events");
+      setEvents(data.items);
+    } catch {
+      setEvents([]);
+    }
+  }
+
   useEffect(() => {
-    api
-      .get<{ items: UnionEvent[] }>("/member/events")
-      .then((data) => setEvents(data.items))
-      .catch(() => setEvents([]));
+    loadEvents();
   }, []);
 
   function openApplyForm(event: UnionEvent) {
@@ -49,8 +56,7 @@ export default function MemberEventsSection() {
         `/member/events/${id}/apply`,
         commentValue !== null ? { comment: commentValue.trim() } : undefined
       );
-      const newStatus = result.waitlisted ? "waitlisted" : "confirmed";
-      setEvents((prev) => prev && prev.map((e) => (e.id === id ? { ...e, my_status: newStatus } : e)));
+      await loadEvents();
       setApplyFormId(null);
       setComment("");
       if (result.waitlisted) {
@@ -69,7 +75,7 @@ export default function MemberEventsSection() {
     setBusyId(id);
     try {
       await api.delete(`/member/events/${id}/apply`);
-      setEvents((prev) => prev && prev.map((e) => (e.id === id ? { ...e, my_status: null } : e)));
+      await loadEvents();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "취소 중 오류가 발생했습니다.");
     } finally {
@@ -127,7 +133,7 @@ export default function MemberEventsSection() {
                 )}
 
                 {event.my_status !== null ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     {event.my_status === "waitlisted" ? (
                       <span className="inline-block rounded-lg bg-amber-50 text-amber-700 text-sm font-medium px-4 py-2">
                         대기 중
@@ -145,6 +151,9 @@ export default function MemberEventsSection() {
                     >
                       {busyId === event.id ? "취소 중..." : "취소하기"}
                     </button>
+                    <span className="text-xs text-slate-400">
+                      참여현황 ({event.confirmed_count}명{event.capacity !== null && ` / 정원 ${event.capacity}명`})
+                    </span>
                   </div>
                 ) : event.status !== "open" ? (
                   <span className="inline-block rounded-lg bg-slate-100 text-slate-400 text-sm font-medium px-4 py-2">
@@ -180,13 +189,18 @@ export default function MemberEventsSection() {
                     </div>
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => openApplyForm(event)}
-                    className="rounded-lg bg-blue-700 text-white text-sm font-medium px-4 py-2"
-                  >
-                    참여하기
-                  </button>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => openApplyForm(event)}
+                      className="rounded-lg bg-blue-700 text-white text-sm font-medium px-4 py-2"
+                    >
+                      참여하기
+                    </button>
+                    <span className="text-xs text-slate-400">
+                      참여현황 ({event.confirmed_count}명{event.capacity !== null && ` / 정원 ${event.capacity}명`})
+                    </span>
+                  </div>
                 )}
               </div>
             </div>

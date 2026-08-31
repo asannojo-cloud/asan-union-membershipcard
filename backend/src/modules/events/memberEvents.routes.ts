@@ -13,7 +13,9 @@ memberEventsRouter.get("/", async (req, res) => {
   const { rows } = await pool.query(
     `SELECT e.id, e.title, e.description, e.status, e.application_prompt, e.image_position_y, e.capacity,
             (e.image_path IS NOT NULL) AS has_image,
-            a.status AS my_status
+            a.status AS my_status,
+            (SELECT COUNT(*)::int FROM union_event_applications c
+             WHERE c.event_id = e.id AND c.status = 'confirmed') AS confirmed_count
      FROM union_events e
      LEFT JOIN union_event_applications a ON a.event_id = e.id AND a.member_id = $1
      WHERE e.is_visible = true
