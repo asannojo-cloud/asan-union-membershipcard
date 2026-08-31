@@ -1,4 +1,4 @@
-import { NavLink, Outlet, Navigate, Link } from "react-router-dom";
+import { NavLink, Outlet, Navigate, Link, useNavigate } from "react-router-dom";
 import { useMemberSessionContext } from "./MemberSessionContext";
 
 // 신분증/조합원증 아이콘 — 이모티콘은 기기/폰트에 따라 카드처럼 안 보일 수 있어
@@ -21,13 +21,20 @@ const tabs = [
 ];
 
 export default function MemberLayout() {
-  const { member, loading } = useMemberSessionContext();
+  const { member, loading, logout } = useMemberSessionContext();
+  const navigate = useNavigate();
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center text-slate-400">불러오는 중...</div>;
   }
   if (!member) {
     return <Navigate to="/member/login" replace />;
+  }
+
+  async function handleLogout() {
+    if (!confirm("로그아웃 하시겠습니까?")) return;
+    await logout();
+    navigate("/member/login", { replace: true });
   }
 
   return (
@@ -40,6 +47,17 @@ export default function MemberLayout() {
       <header className="relative bg-blue-800 text-white pb-3 pt-[calc(env(safe-area-inset-top)+1.25rem)] sm:pt-3 font-semibold tracking-wide flex items-center justify-center gap-2">
         <img src="/union-logo.png" alt="" className="h-8 w-8 object-contain" />
         <span>아산시공무원노동조합</span>
+        <button
+          type="button"
+          onClick={handleLogout}
+          aria-label="로그아웃"
+          className="absolute left-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full active:bg-blue-700"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16 17l5-5-5-5M21 12H9" />
+          </svg>
+        </button>
         <Link
           to="/member/card"
           aria-label="홈으로 이동"
