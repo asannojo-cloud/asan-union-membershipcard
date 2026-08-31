@@ -5,6 +5,13 @@ import { env } from "../config/env";
 // 날짜가 하루 밀리는 문제가 생긴다. "YYYY-MM-DD" 문자열 그대로 사용한다.
 types.setTypeParser(1082, (val: string) => val);
 
+// BIGINT/BIGSERIAL(OID 20)은 JS number의 안전 정수 범위(2^53)를 넘을 수 있어서 pg가
+// 기본적으로 문자열로 반환한다. 이 앱의 id는 그 정도로 커질 일이 없는데, 프론트엔드
+// 코드가 id를 number로 가정(예: typeof id === "number")하면 문자열("6")이 내려와서
+// 조용히 분기를 타지 않는 문제가 생긴다(2026-08-31, 조합사업 이벤트 수정 저장 안 되던 원인).
+// 다른 BIGSERIAL 컬럼(members.id 등)에서도 같은 문제가 재발하지 않도록 전역으로 숫자 변환한다.
+types.setTypeParser(20, (val: string) => parseInt(val, 10));
+
 export const pool = new Pool({
   connectionString: env.databaseUrl,
   // Render 등 대부분의 매니지드 PostgreSQL은 SSL 연결을 요구한다.
