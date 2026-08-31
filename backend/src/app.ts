@@ -21,6 +21,8 @@ import { adminAuthRouter } from "./modules/auth/admin.routes";
 import { membersRouter } from "./modules/members/members.routes";
 import { excelRouter } from "./modules/excel/excel.routes";
 import { auditRouter } from "./modules/audit/audit.routes";
+import { adminEventsRouter } from "./modules/events/adminEvents.routes";
+import { memberEventsRouter } from "./modules/events/memberEvents.routes";
 
 const PgSession = connectPgSimple(session);
 
@@ -80,12 +82,14 @@ export function createApp() {
 
   app.use("/api/member/login", loginRateLimiter);
   app.use("/api/member", memberAuthRouter);
+  app.use("/api/member/events", memberEventsRouter);
 
   app.use("/api/admin/auth/login", loginRateLimiter);
   app.use("/api/admin/auth", adminAuthRouter);
   app.use("/api/admin/members", membersRouter);
   app.use("/api/admin/excel", excelRouter);
   app.use("/api/admin/audit-logs", auditRouter);
+  app.use("/api/admin/events", adminEventsRouter);
 
   app.use("/api", notFoundHandler);
 

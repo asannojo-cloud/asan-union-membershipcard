@@ -7,6 +7,7 @@ const links = [
   { to: "/admin/members", label: "회원관리" },
   { to: "/admin/excel", label: "Excel 관리" },
   { to: "/admin/photo-batch", label: "사진 일괄 업로드" },
+  { to: "/admin/events", label: "조합사업 관리" },
   { to: "/admin/audit-logs", label: "변경 이력" },
   { to: "/admin/security", label: "보안 설정" },
 ];

@@ -1,3 +1,5 @@
+import MemberEventsSection from "./MemberEventsSection";
+
 // 협약 아이콘 — 악수 이모티콘.
 function AgreementIcon() {
   return <span className="text-xl leading-none">🤝</span>;
@@ -34,6 +36,8 @@ export default function MemberHelpPage() {
   return (
     <div className="px-6 pt-8 max-w-sm mx-auto text-sm text-slate-600 leading-relaxed">
       <h2 className="text-lg font-bold text-slate-900 mb-4">조합원복지사업</h2>
+
+      <MemberEventsSection />
 
       <div className="space-y-2">
         {MEMBER_SERVICES.map((service) => (
