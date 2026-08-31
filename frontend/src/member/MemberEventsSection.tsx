@@ -79,9 +79,15 @@ export default function MemberEventsSection() {
 
   if (!events || events.length === 0) return null;
 
+  // 협약기관 검색 등 다른 메뉴들과 구분되는 별도 메뉴처럼 보이도록, 배경색이 다른 박스로 감싼다.
   return (
-    <div className="mb-6">
-      <h3 className="text-sm font-bold text-slate-700 mb-2 px-1">노조 행사 참여</h3>
+    <div className="mb-6 bg-indigo-50 border border-indigo-100 rounded-2xl p-4">
+      <div className="flex items-center gap-2 mb-3 px-1">
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 shrink-0 text-base">
+          📣
+        </span>
+        <h3 className="text-base font-bold text-slate-900">노조 행사 참여</h3>
+      </div>
       {error && <p className="text-xs text-red-600 px-1 mb-2">{error}</p>}
       <div className="space-y-3">
         {events.map((event) => {
