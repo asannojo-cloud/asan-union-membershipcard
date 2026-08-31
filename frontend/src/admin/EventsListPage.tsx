@@ -14,7 +14,8 @@ interface EventItem {
 
 export default function EventsListPage() {
   const [events, setEvents] = useState<EventItem[] | null>(null);
-  const [showForm, setShowForm] = useState(false);
+  // null이면 폼 닫힘, "create"면 새 이벤트 등록, 숫자면 그 id의 이벤트를 수정 중.
+  const [formMode, setFormMode] = useState<"create" | number | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [image, setImage] = useState<File | null>(null);
@@ -31,7 +32,30 @@ export default function EventsListPage() {
     load();
   }, []);
 
-  async function handleCreate(e: FormEvent) {
+  function resetForm() {
+    setFormMode(null);
+    setTitle("");
+    setDescription("");
+    setImage(null);
+    setError(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function openCreateForm() {
+    resetForm();
+    setFormMode("create");
+  }
+
+  function openEditForm(ev: EventItem) {
+    setFormMode(ev.id);
+    setTitle(ev.title);
+    setDescription(ev.description ?? "");
+    setImage(null);
+    setError(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
@@ -40,15 +64,16 @@ export default function EventsListPage() {
       form.append("title", title);
       form.append("description", description);
       if (image) form.append("image", image);
-      await api.post("/admin/events", form);
-      setTitle("");
-      setDescription("");
-      setImage(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      setShowForm(false);
+
+      if (formMode === "create") {
+        await api.post("/admin/events", form);
+      } else if (typeof formMode === "number") {
+        await api.put(`/admin/events/${formMode}`, form);
+      }
+      resetForm();
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "등록 중 오류가 발생했습니다.");
+      setError(err instanceof ApiError ? err.message : "저장 중 오류가 발생했습니다.");
     } finally {
       setSubmitting(false);
     }
@@ -71,15 +96,18 @@ export default function EventsListPage() {
         <h1 className="text-xl font-bold text-slate-900">조합사업 관리</h1>
         <button
           type="button"
-          onClick={() => setShowForm((v) => !v)}
+          onClick={() => (formMode === "create" ? resetForm() : openCreateForm())}
           className="rounded-lg bg-slate-900 text-white text-sm font-medium px-4 py-2"
         >
-          {showForm ? "취소" : "+ 새 이벤트 등록"}
+          {formMode === "create" ? "취소" : "+ 새 이벤트 등록"}
         </button>
       </div>
 
-      {showForm && (
-        <form onSubmit={handleCreate} className="bg-white rounded-2xl shadow-sm p-6 mb-6 space-y-4">
+      {formMode !== null && (
+        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm p-6 mb-6 space-y-4">
+          <p className="text-sm font-semibold text-slate-700">
+            {formMode === "create" ? "새 이벤트 등록" : "이벤트 수정"}
+          </p>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">이벤트명</label>
             <input
@@ -101,7 +129,9 @@ export default function EventsListPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">전단지 이미지 (선택)</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              전단지 이미지 {typeof formMode === "number" ? "(변경하려면 새로 선택, 안 하면 기존 이미지 유지)" : "(선택)"}
+            </label>
             <input
               ref={fileInputRef}
               type="file"
@@ -111,13 +141,18 @@ export default function EventsListPage() {
             />
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded-lg bg-blue-700 text-white text-sm font-medium px-4 py-2 disabled:opacity-50"
-          >
-            {submitting ? "등록 중..." : "등록"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="submit"
+              disabled={submitting}
+              className="rounded-lg bg-blue-700 text-white text-sm font-medium px-4 py-2 disabled:opacity-50"
+            >
+              {submitting ? "저장 중..." : formMode === "create" ? "등록" : "저장"}
+            </button>
+            <button type="button" onClick={resetForm} className="text-sm text-slate-500 underline">
+              취소
+            </button>
+          </div>
         </form>
       )}
 
@@ -152,6 +187,9 @@ export default function EventsListPage() {
                   <Link to={`/admin/events/${ev.id}`} className="text-blue-700 font-medium underline">
                     신청자 {ev.applicant_count}명 보기
                   </Link>
+                  <button type="button" onClick={() => openEditForm(ev)} className="text-slate-500 underline">
+                    수정
+                  </button>
                   <button type="button" onClick={() => handleToggleStatus(ev)} className="text-slate-500 underline">
                     {ev.status === "open" ? "마감하기" : "다시 열기"}
                   </button>
