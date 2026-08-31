@@ -30,6 +30,7 @@ const imageUpload = multer({
 adminEventsRouter.get("/", async (req, res) => {
   const { rows } = await pool.query(`
     SELECT e.id, e.title, e.description, e.status, (e.image_path IS NOT NULL) AS has_image,
+           e.application_prompt, e.image_position_y,
            e.created_at,
            (SELECT COUNT(*)::int FROM union_event_applications a WHERE a.event_id = e.id) AS applicant_count
     FROM union_events e
@@ -55,7 +56,7 @@ adminEventsRouter.get("/:id/applications", async (req, res) => {
   if (!eventRows[0]) return res.status(404).json({ error: "이벤트를 찾을 수 없습니다." });
 
   const { rows } = await pool.query(
-    `SELECT m.member_id, m.name_enc, m.phone_enc, a.applied_at
+    `SELECT m.member_id, m.name_enc, m.phone_enc, a.applied_at, a.comment
      FROM union_event_applications a
      JOIN members m ON m.id = a.member_id
      WHERE a.event_id = $1
@@ -67,14 +68,23 @@ adminEventsRouter.get("/:id/applications", async (req, res) => {
     name: decryptName(r.name_enc),
     phone: decryptPhone(r.phone_enc),
     appliedAt: r.applied_at,
+    comment: r.comment,
   }));
 
   res.json({ event: eventRows[0], applicants });
 });
 
+// 신청 시 회원에게 보여줄 질문 문구는 관리자가 이벤트마다 직접 입력하거나(자유 텍스트),
+// 프론트엔드에서 제공하는 자주 쓰는 문구 중 골라 쓸 수 있다 — 값 자체는 그냥 텍스트라
+// 어느 쪽이든 서버는 동일하게 처리한다.
+const imagePositionY = z.coerce.number().int().min(0).max(100);
+const DEFAULT_APPLICATION_PROMPT = "신청사유 또는 아공노에 바라는 점을 남겨주세요.";
+
 const createSchema = z.object({
   title: z.string().min(1, "이벤트명을 입력해주세요.").max(100),
   description: z.string().max(2000).optional(),
+  applicationPrompt: z.string().max(200).optional(),
+  imagePositionY: imagePositionY.optional(),
 });
 
 adminEventsRouter.post("/", (req, res, next) => {
@@ -85,15 +95,21 @@ adminEventsRouter.post("/", (req, res, next) => {
       if (!parsed.success) {
         return res.status(400).json({ error: "입력값을 확인해주세요.", details: parsed.error.flatten() });
       }
-      const { title, description } = parsed.data;
+      const { title, description, applicationPrompt, imagePositionY } = parsed.data;
 
       if (req.file && !detectImageType(req.file.buffer)) {
         return res.status(400).json({ error: "이미지 파일이 손상되었거나 지원하지 않는 형식입니다." });
       }
 
       const { rows } = await pool.query(
-        `INSERT INTO union_events (title, description) VALUES ($1, $2) RETURNING id`,
-        [title, description ?? null]
+        `INSERT INTO union_events (title, description, application_prompt, image_position_y)
+         VALUES ($1, $2, $3, $4) RETURNING id`,
+        [
+          title,
+          description ?? null,
+          applicationPrompt || DEFAULT_APPLICATION_PROMPT,
+          imagePositionY ?? 50,
+        ]
       );
       const id = rows[0].id;
 
@@ -119,6 +135,8 @@ const updateSchema = z.object({
   title: z.string().min(1).max(100).optional(),
   description: z.string().max(2000).optional(),
   status: z.enum(["open", "closed"]).optional(),
+  applicationPrompt: z.string().min(1).max(200).optional(),
+  imagePositionY: imagePositionY.optional(),
 });
 
 adminEventsRouter.put("/:id", (req, res, next) => {
@@ -134,10 +152,12 @@ adminEventsRouter.put("/:id", (req, res, next) => {
       const { rows } = await pool.query(`SELECT id FROM union_events WHERE id = $1`, [id]);
       if (!rows[0]) return res.status(404).json({ error: "이벤트를 찾을 수 없습니다." });
 
-      const updates: Record<string, string> = {};
+      const updates: Record<string, string | number> = {};
       if (parsed.data.title !== undefined) updates.title = parsed.data.title;
       if (parsed.data.description !== undefined) updates.description = parsed.data.description;
       if (parsed.data.status !== undefined) updates.status = parsed.data.status;
+      if (parsed.data.applicationPrompt !== undefined) updates.application_prompt = parsed.data.applicationPrompt;
+      if (parsed.data.imagePositionY !== undefined) updates.image_position_y = parsed.data.imagePositionY;
 
       if (req.file && !detectImageType(req.file.buffer)) {
         return res.status(400).json({ error: "이미지 파일이 손상되었거나 지원하지 않는 형식입니다." });

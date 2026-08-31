@@ -7,6 +7,7 @@ interface Applicant {
   name: string | null;
   phone: string | null;
   appliedAt: string;
+  comment: string | null;
 }
 
 function formatPhone(normalized: string | null): string {
@@ -47,6 +48,7 @@ export default function EventApplicantsPage() {
                 <th className="text-left font-medium px-4 py-3">이름</th>
                 <th className="text-left font-medium px-4 py-3">휴대폰번호</th>
                 <th className="text-left font-medium px-4 py-3">신청일시</th>
+                <th className="text-left font-medium px-4 py-3">신청사유</th>
               </tr>
             </thead>
             <tbody>
@@ -56,6 +58,7 @@ export default function EventApplicantsPage() {
                   <td className="px-4 py-3">{a.name}</td>
                   <td className="px-4 py-3">{formatPhone(a.phone)}</td>
                   <td className="px-4 py-3 text-slate-500">{new Date(a.appliedAt).toLocaleString("ko-KR")}</td>
+                  <td className="px-4 py-3 text-slate-600 whitespace-pre-wrap max-w-xs">{a.comment || "-"}</td>
                 </tr>
               ))}
             </tbody>
