@@ -136,6 +136,39 @@ export default function MemberMutualAidPage() {
     <div className="px-6 pt-8 max-w-sm mx-auto text-sm text-slate-600 leading-relaxed">
       <h2 className="text-lg font-bold text-slate-900 mb-4">아산시청 공무원 상조서비스</h2>
 
+      {/* 문의 전화번호가 페이지 맨 아래에 있어서 스크롤해야만 보인다는 의견이 있어 맨 위로 옮김 —
+          급하게 연락해야 할 수도 있는 정보라 한 화면 안에 바로 보이는 게 중요하다. */}
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        <a
+          href="tel:041-540-2667"
+          className="flex flex-col items-center justify-center gap-1 bg-white rounded-2xl shadow-sm py-3 px-2 active:bg-slate-50"
+        >
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-700 shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+              <path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.61 21 3 13.39 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.46.57 3.58a1 1 0 0 1-.25 1.01l-2.2 2.2Z" />
+            </svg>
+          </span>
+          <span className="text-center">
+            <span className="block text-[11px] text-slate-400">노동조합 문의</span>
+            <span className="block text-sm font-semibold text-slate-900">041-540-2667</span>
+          </span>
+        </a>
+        <a
+          href="tel:041-540-2225"
+          className="flex flex-col items-center justify-center gap-1 bg-white rounded-2xl shadow-sm py-3 px-2 active:bg-slate-50"
+        >
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-700 shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+              <path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.61 21 3 13.39 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.46.57 3.58a1 1 0 0 1-.25 1.01l-2.2 2.2Z" />
+            </svg>
+          </span>
+          <span className="text-center">
+            <span className="block text-[11px] text-slate-400">총무과 문의</span>
+            <span className="block text-sm font-semibold text-slate-900">041-540-2225</span>
+          </span>
+        </a>
+      </div>
+
       <div className="bg-white rounded-2xl shadow-sm p-5">
         <h3 className="inline-block rounded-md bg-slate-600 px-2.5 py-1 text-sm font-bold text-white mb-1.5">
           지원대상
@@ -222,38 +255,6 @@ export default function MemberMutualAidPage() {
             </div>
           )}
         </div>
-      </div>
-
-      <h3 className="text-sm font-bold text-slate-700 mt-6 mb-2 px-1">문의</h3>
-      <div className="space-y-2">
-        <a
-          href="tel:041-540-2667"
-          className="flex items-center gap-3 bg-white rounded-2xl shadow-sm p-5 active:bg-slate-50"
-        >
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-700 shrink-0">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
-              <path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.61 21 3 13.39 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.46.57 3.58a1 1 0 0 1-.25 1.01l-2.2 2.2Z" />
-            </svg>
-          </span>
-          <span>
-            <span className="block text-xs text-slate-400">노동조합 문의전화</span>
-            <span className="block text-base font-semibold text-slate-900">041-540-2667</span>
-          </span>
-        </a>
-        <a
-          href="tel:041-540-2225"
-          className="flex items-center gap-3 bg-white rounded-2xl shadow-sm p-5 active:bg-slate-50"
-        >
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-700 shrink-0">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
-              <path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.61 21 3 13.39 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.46.57 3.58a1 1 0 0 1-.25 1.01l-2.2 2.2Z" />
-            </svg>
-          </span>
-          <span>
-            <span className="block text-xs text-slate-400">총무과 문의전화</span>
-            <span className="block text-base font-semibold text-slate-900">041-540-2225</span>
-          </span>
-        </a>
       </div>
     </div>
   );
