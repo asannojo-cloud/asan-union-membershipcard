@@ -48,15 +48,18 @@ export default function EventsListPage() {
     load();
   }, []);
 
-  // 새로 선택한 파일의 미리보기 URL을 만들고, 정리한다.
+  // 새로 선택한 파일의 미리보기를 만든다. helmet 기본 CSP의 img-src가 'self' data:까지만
+  // 허용하고 blob:은 막고 있어서(2026-08-31 확인, 미리보기가 안 뜨던 원인) URL.createObjectURL
+  // 대신 FileReader로 data: URL을 만든다.
   useEffect(() => {
     if (!image) {
       setImagePreviewUrl(null);
       return;
     }
-    const url = URL.createObjectURL(image);
-    setImagePreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
+    const reader = new FileReader();
+    reader.onload = () => setImagePreviewUrl(reader.result as string);
+    reader.readAsDataURL(image);
+    return () => reader.abort();
   }, [image]);
 
   function resetForm() {
