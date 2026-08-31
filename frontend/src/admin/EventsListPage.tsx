@@ -19,7 +19,8 @@ interface EventItem {
 }
 
 // "없음"을 고르면 회원 화면에 입력창 자체가 뜨지 않고 바로 신청 처리된다.
-const PROMPT_OPTIONS = ["신청사유", "아공노에 바란다", "신규시책", "없음"] as const;
+const PROMPT_FIXED_OPTIONS = ["신청사유", "아공노에 바란다"] as const;
+type PromptMode = "신청사유" | "아공노에 바란다" | "직접입력" | "없음";
 
 export default function EventsListPage() {
   const [events, setEvents] = useState<EventItem[] | null>(null);
@@ -27,7 +28,8 @@ export default function EventsListPage() {
   const [formMode, setFormMode] = useState<"create" | number | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [applicationPrompt, setApplicationPrompt] = useState<string>(PROMPT_OPTIONS[0]);
+  const [promptMode, setPromptMode] = useState<PromptMode>("신청사유");
+  const [customPrompt, setCustomPrompt] = useState("");
   const [imagePositionY, setImagePositionY] = useState(50);
   const [capacity, setCapacity] = useState("");
   const [isVisible, setIsVisible] = useState(true);
@@ -87,7 +89,8 @@ export default function EventsListPage() {
     setFormMode(null);
     setTitle("");
     setDescription("");
-    setApplicationPrompt(PROMPT_OPTIONS[0]);
+    setPromptMode("신청사유");
+    setCustomPrompt("");
     setImagePositionY(50);
     setCapacity("");
     setIsVisible(true);
@@ -108,7 +111,13 @@ export default function EventsListPage() {
     setFormMode(ev.id);
     setTitle(ev.title);
     setDescription(ev.description ?? "");
-    setApplicationPrompt(ev.application_prompt || PROMPT_OPTIONS[0]);
+    if (ev.application_prompt === "없음" || (PROMPT_FIXED_OPTIONS as readonly string[]).includes(ev.application_prompt)) {
+      setPromptMode((ev.application_prompt || "신청사유") as PromptMode);
+      setCustomPrompt("");
+    } else {
+      setPromptMode("직접입력");
+      setCustomPrompt(ev.application_prompt);
+    }
     setImagePositionY(ev.image_position_y ?? 50);
     setCapacity(ev.capacity !== null ? String(ev.capacity) : "");
     setIsVisible(ev.is_visible);
@@ -127,8 +136,13 @@ export default function EventsListPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (promptMode === "직접입력" && !customPrompt.trim()) {
+      setError("직접 입력할 문구를 입력해주세요.");
+      return;
+    }
     setSubmitting(true);
     try {
+      const applicationPrompt = promptMode === "직접입력" ? customPrompt.trim() : promptMode;
       const form = new FormData();
       form.append("title", title);
       form.append("description", description);
@@ -208,26 +222,34 @@ export default function EventsListPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              신청 시 요청할 문구 (직접 입력하거나 목록에서 선택)
-            </label>
-            <input
-              value={applicationPrompt}
-              onChange={(e) => setApplicationPrompt(e.target.value)}
-              list="prompt-presets"
-              placeholder="예: 신청사유"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              maxLength={200}
-              required
-            />
-            <datalist id="prompt-presets">
-              {PROMPT_OPTIONS.map((p) => (
-                <option key={p} value={p} />
+            <label className="block text-sm font-medium text-slate-700 mb-1">신청 시 요청할 문구</label>
+            <div className="space-y-1.5">
+              {(["신청사유", "아공노에 바란다", "직접입력", "없음"] as const).map((mode) => (
+                <label key={mode} className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="radio"
+                    name="promptMode"
+                    checked={promptMode === mode}
+                    onChange={() => setPromptMode(mode)}
+                    className="border-slate-300"
+                  />
+                  {mode}
+                </label>
               ))}
-            </datalist>
+            </div>
+            {promptMode === "직접입력" && (
+              <input
+                value={customPrompt}
+                onChange={(e) => setCustomPrompt(e.target.value)}
+                placeholder="예: 참석 인원과 함께 남겨주세요."
+                className="w-full mt-2 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                maxLength={200}
+                autoFocus
+              />
+            )}
             <p className="text-xs text-slate-400 mt-1">
-              {applicationPrompt === "없음"
-                ? "\"없음\"으로 두면 회원 화면에 입력창 없이 바로 신청 처리됩니다."
+              {promptMode === "없음"
+                ? "\"없음\"을 고르면 입력창이 표출되지 않고, \"참여하기\"를 누르는 즉시 신청 처리됩니다."
                 : "회원이 \"참여하기\"를 누르면 이 문구와 함께 필수 입력창이 나타납니다."}
             </p>
           </div>
