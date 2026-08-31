@@ -14,14 +14,8 @@ interface EventItem {
   created_at: string;
 }
 
-// 관리자가 매번 새로 타이핑하지 않도록 자주 쓰는 문구를 제시한다 — 목록에 없는 문구는
-// 직접 입력해서 쓰면 된다(datalist는 강제 선택이 아니라 자동완성 제안일 뿐).
-const PROMPT_PRESETS = [
-  "신청사유 또는 아공노에 바라는 점을 남겨주세요.",
-  "아공노에 바라는 점을 자유롭게 남겨주세요.",
-  "참여 동기를 간단히 남겨주세요.",
-  "참석 인원과 함께 남겨주세요.",
-];
+// "없음"을 고르면 회원 화면에 입력창 자체가 뜨지 않고 바로 신청 처리된다.
+const PROMPT_OPTIONS = ["신청사유", "아공노에 바란다", "신규시책", "없음"] as const;
 
 export default function EventsListPage() {
   const [events, setEvents] = useState<EventItem[] | null>(null);
@@ -29,7 +23,7 @@ export default function EventsListPage() {
   const [formMode, setFormMode] = useState<"create" | number | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [applicationPrompt, setApplicationPrompt] = useState(PROMPT_PRESETS[0]);
+  const [applicationPrompt, setApplicationPrompt] = useState<string>(PROMPT_OPTIONS[0]);
   const [imagePositionY, setImagePositionY] = useState(50);
   const [status, setStatus] = useState<"open" | "closed">("open");
   const [image, setImage] = useState<File | null>(null);
@@ -64,7 +58,7 @@ export default function EventsListPage() {
     setFormMode(null);
     setTitle("");
     setDescription("");
-    setApplicationPrompt(PROMPT_PRESETS[0]);
+    setApplicationPrompt(PROMPT_OPTIONS[0]);
     setImagePositionY(50);
     setStatus("open");
     setImage(null);
@@ -82,7 +76,7 @@ export default function EventsListPage() {
     setFormMode(ev.id);
     setTitle(ev.title);
     setDescription(ev.description ?? "");
-    setApplicationPrompt(ev.application_prompt || PROMPT_PRESETS[0]);
+    setApplicationPrompt(ev.application_prompt || PROMPT_OPTIONS[0]);
     setImagePositionY(ev.image_position_y ?? 50);
     setStatus(ev.status);
     setImage(null);
@@ -176,36 +170,41 @@ export default function EventsListPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              신청 시 요청할 문구 (직접 입력하거나 아래 목록에서 선택)
-            </label>
-            <input
+            <label className="block text-sm font-medium text-slate-700 mb-1">신청 시 요청할 문구</label>
+            <select
               value={applicationPrompt}
               onChange={(e) => setApplicationPrompt(e.target.value)}
-              list="prompt-presets"
-              placeholder="예: 신청사유 또는 아공노에 바라는 점을 남겨주세요."
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              maxLength={200}
-              required
-            />
-            <datalist id="prompt-presets">
-              {PROMPT_PRESETS.map((p) => (
-                <option key={p} value={p} />
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
+            >
+              {PROMPT_OPTIONS.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
               ))}
-            </datalist>
-            <p className="text-xs text-slate-400 mt-1">회원이 "참여하기"를 누르면 이 문구와 함께 필수 입력창이 나타납니다.</p>
+            </select>
+            <p className="text-xs text-slate-400 mt-1">
+              {applicationPrompt === "없음"
+                ? "회원이 \"참여하기\"를 누르면 입력창 없이 바로 신청 처리됩니다."
+                : "회원이 \"참여하기\"를 누르면 이 문구와 함께 필수 입력창이 나타납니다."}
+            </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
               전단지 이미지 {typeof formMode === "number" ? "(변경하려면 새로 선택, 안 하면 기존 이미지 유지)" : "(선택)"}
             </label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={(e) => setImage(e.target.files?.[0] ?? null)}
-              className="text-sm"
-            />
+            <label className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100 px-4 py-2 text-sm text-slate-700 cursor-pointer">
+              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14" />
+              </svg>
+              {image ? image.name : "파일 선택"}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(e) => setImage(e.target.files?.[0] ?? null)}
+                className="hidden"
+              />
+            </label>
           </div>
           {previewSrc && (
             <div>

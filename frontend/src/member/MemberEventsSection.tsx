@@ -28,18 +28,26 @@ export default function MemberEventsSection() {
       .catch(() => setEvents([]));
   }, []);
 
-  function openApplyForm(id: number) {
+  function openApplyForm(event: UnionEvent) {
+    // 관리자가 "없음"으로 설정한 이벤트는 입력창 없이 바로 신청 처리한다.
+    if (event.application_prompt === "없음") {
+      handleApply(event.id, null);
+      return;
+    }
     setError(null);
     setComment("");
-    setApplyFormId(id);
+    setApplyFormId(event.id);
   }
 
-  async function handleApply(id: number) {
-    if (!comment.trim()) return;
+  async function handleApply(id: number, commentValue: string | null) {
+    if (commentValue !== null && !commentValue.trim()) return;
     setError(null);
     setBusyId(id);
     try {
-      await api.post(`/member/events/${id}/apply`, { comment: comment.trim() });
+      await api.post(
+        `/member/events/${id}/apply`,
+        commentValue !== null ? { comment: commentValue.trim() } : undefined
+      );
       setEvents((prev) => prev && prev.map((e) => (e.id === id ? { ...e, applied: true } : e)));
       setApplyFormId(null);
       setComment("");
@@ -139,7 +147,7 @@ export default function MemberEventsSection() {
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => handleApply(event.id)}
+                        onClick={() => handleApply(event.id, comment)}
                         disabled={busyId === event.id || !comment.trim()}
                         className="rounded-lg bg-blue-700 text-white text-sm font-medium px-4 py-2 disabled:opacity-50"
                       >
@@ -157,7 +165,7 @@ export default function MemberEventsSection() {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => openApplyForm(event.id)}
+                    onClick={() => openApplyForm(event)}
                     className="rounded-lg bg-blue-700 text-white text-sm font-medium px-4 py-2"
                   >
                     참여하기
