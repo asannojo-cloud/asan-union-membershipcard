@@ -35,8 +35,13 @@ export default function EventsListPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
-    const data = await api.get<{ items: EventItem[] }>("/admin/events");
-    setEvents(data.items);
+    try {
+      const data = await api.get<{ items: EventItem[] }>("/admin/events");
+      setEvents(data.items);
+    } catch (err) {
+      setListError(err instanceof ApiError ? err.message : "목록을 불러오지 못했습니다.");
+      setEvents([]);
+    }
   }
 
   useEffect(() => {
