@@ -12,6 +12,7 @@ memberEventsRouter.use(memberGuard);
 memberEventsRouter.get("/", async (req, res) => {
   const { rows } = await pool.query(
     `SELECT e.id, e.title, e.description, e.status, e.application_prompt, e.image_position_y, e.capacity,
+            e.survey_url,
             (e.image_path IS NOT NULL) AS has_image,
             a.status AS my_status,
             (SELECT COUNT(*)::int FROM union_event_applications c

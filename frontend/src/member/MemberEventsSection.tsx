@@ -10,6 +10,7 @@ interface UnionEvent {
   application_prompt: string;
   image_position_y: number;
   capacity: number | null;
+  survey_url: string | null;
   my_status: "confirmed" | "waitlisted" | null;
   confirmed_count: number;
 }
@@ -136,23 +137,33 @@ export default function MemberEventsSection() {
 
                 {event.my_status !== null ? (
                   <div className="flex items-center gap-2 flex-wrap">
-                    {event.my_status === "waitlisted" ? (
-                      <span className="inline-block rounded-lg bg-amber-50 text-amber-700 text-sm font-medium px-4 py-2">
-                        대기 중
-                      </span>
-                    ) : (
-                      <span className="inline-block rounded-lg bg-green-50 text-green-700 text-sm font-medium px-4 py-2">
-                        참여 완료
-                      </span>
-                    )}
+                    {/* 버튼 하나로 현재 상태 표시 + 클릭 시 신청 취소(삭제)까지 처리 */}
                     <button
                       type="button"
                       onClick={() => handleCancel(event.id)}
                       disabled={busyId === event.id}
-                      className="text-xs text-slate-400 underline disabled:opacity-50"
+                      className={`inline-block rounded-lg text-sm font-medium px-4 py-2 disabled:opacity-50 ${
+                        event.my_status === "waitlisted"
+                          ? "bg-amber-50 text-amber-700 hover:bg-amber-100"
+                          : "bg-green-50 text-green-700 hover:bg-green-100"
+                      }`}
                     >
-                      {busyId === event.id ? "취소 중..." : "취소하기"}
+                      {busyId === event.id
+                        ? "취소 중..."
+                        : event.my_status === "waitlisted"
+                          ? "대기(삭제)"
+                          : "참여(삭제)"}
                     </button>
+                    {event.survey_url && (
+                      <a
+                        href={event.survey_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block rounded-lg bg-indigo-50 text-indigo-700 text-sm font-medium px-4 py-2 hover:bg-indigo-100"
+                      >
+                        설문조사 참여
+                      </a>
+                    )}
                     <span className="text-xs text-slate-400">
                       참여현황 ({event.confirmed_count}명{event.capacity !== null && ` / 정원 ${event.capacity}명`})
                     </span>

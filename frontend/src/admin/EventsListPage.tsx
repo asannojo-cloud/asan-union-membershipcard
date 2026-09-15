@@ -13,6 +13,7 @@ interface EventItem {
   capacity: number | null;
   is_visible: boolean;
   display_order: number | null;
+  survey_url: string | null;
   applicant_count: number;
   waitlisted_count: number;
   created_at: string;
@@ -34,6 +35,7 @@ export default function EventsListPage() {
   const [capacity, setCapacity] = useState("");
   const [isVisible, setIsVisible] = useState(true);
   const [displayOrder, setDisplayOrder] = useState("");
+  const [surveyUrl, setSurveyUrl] = useState("");
   const [status, setStatus] = useState<"open" | "closed">("open");
   const [image, setImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
@@ -95,6 +97,7 @@ export default function EventsListPage() {
     setCapacity("");
     setIsVisible(true);
     setDisplayOrder("");
+    setSurveyUrl("");
     setStatus("open");
     setImage(null);
     setExistingHasImage(false);
@@ -122,6 +125,7 @@ export default function EventsListPage() {
     setCapacity(ev.capacity !== null ? String(ev.capacity) : "");
     setIsVisible(ev.is_visible);
     setDisplayOrder(ev.display_order !== null ? String(ev.display_order) : "");
+    setSurveyUrl(ev.survey_url ?? "");
     setStatus(ev.status);
     setImage(null);
     setExistingHasImage(ev.has_image);
@@ -151,6 +155,7 @@ export default function EventsListPage() {
       form.append("capacity", capacity);
       form.append("isVisible", String(isVisible));
       form.append("displayOrder", displayOrder);
+      form.append("surveyUrl", surveyUrl);
       if (image) form.append("image", image);
 
       if (formMode === "create") {
@@ -324,6 +329,19 @@ export default function EventsListPage() {
               />
               <p className="text-xs text-slate-400 mt-1">비워두면 최신 등록순으로 표시됩니다.</p>
             </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">설문조사 링크 (선택)</label>
+            <input
+              type="url"
+              value={surveyUrl}
+              onChange={(e) => setSurveyUrl(e.target.value)}
+              placeholder="https://forms.gle/..."
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+            <p className="text-xs text-slate-400 mt-1">
+              입력하면 회원 화면에 "설문조사 참여" 버튼이 나타나 이 링크로 연결됩니다.
+            </p>
           </div>
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input
