@@ -38,6 +38,14 @@ export default function MemberEventsSection() {
   }, []);
 
   function openApplyForm(event: UnionEvent) {
+    // 설문조사 링크가 걸린 이벤트는 "참여하기"를 누르면 사유 입력 없이 설문 링크로 바로 이동하면서
+    // 동시에 참여 처리(신청 기록)한다 — 설문 응답 자체가 참여이므로 별도 사유를 받지 않는다.
+    // 새 탭 열기는 클릭 이벤트 핸들러 안에서 동기적으로 호출해야 팝업 차단을 피할 수 있다.
+    if (event.survey_url) {
+      window.open(event.survey_url, "_blank", "noopener,noreferrer");
+      handleApply(event.id, null);
+      return;
+    }
     // 관리자가 "없음"으로 설정한 이벤트는 입력창 없이 바로 신청 처리한다.
     if (event.application_prompt === "없음") {
       handleApply(event.id, null);
