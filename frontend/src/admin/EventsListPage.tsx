@@ -14,6 +14,8 @@ interface EventItem {
   is_visible: boolean;
   display_order: number | null;
   survey_url: string | null;
+  end_date: string | null;
+  is_ended: boolean;
   applicant_count: number;
   waitlisted_count: number;
   created_at: string;
@@ -36,6 +38,7 @@ export default function EventsListPage() {
   const [isVisible, setIsVisible] = useState(true);
   const [displayOrder, setDisplayOrder] = useState("");
   const [surveyUrl, setSurveyUrl] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [status, setStatus] = useState<"open" | "closed">("open");
   const [image, setImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
@@ -98,6 +101,7 @@ export default function EventsListPage() {
     setIsVisible(true);
     setDisplayOrder("");
     setSurveyUrl("");
+    setEndDate("");
     setStatus("open");
     setImage(null);
     setExistingHasImage(false);
@@ -126,6 +130,7 @@ export default function EventsListPage() {
     setIsVisible(ev.is_visible);
     setDisplayOrder(ev.display_order !== null ? String(ev.display_order) : "");
     setSurveyUrl(ev.survey_url ?? "");
+    setEndDate(ev.end_date ?? "");
     setStatus(ev.status);
     setImage(null);
     setExistingHasImage(ev.has_image);
@@ -156,6 +161,7 @@ export default function EventsListPage() {
       form.append("isVisible", String(isVisible));
       form.append("displayOrder", displayOrder);
       form.append("surveyUrl", surveyUrl);
+      form.append("endDate", endDate);
       if (image) form.append("image", image);
 
       if (formMode === "create") {
@@ -331,6 +337,18 @@ export default function EventsListPage() {
             </div>
           </div>
           <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">종료일 (선택)</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+            <p className="text-xs text-slate-400 mt-1">
+              종료일이 지나면(당일까지는 표시) 회원 화면에서 자동으로 숨겨집니다. 비워두면 자동으로 숨기지 않습니다.
+            </p>
+          </div>
+          <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">설문조사 링크 (선택)</label>
             <input
               type="url"
@@ -405,6 +423,15 @@ export default function EventsListPage() {
                   >
                     {ev.status === "open" ? "신청가능" : "마감"}
                   </span>
+                  {ev.end_date && (
+                    <span
+                      className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                        ev.is_ended ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      {ev.is_ended ? `기간 종료(${ev.end_date}) · 회원화면 숨김` : `~${ev.end_date}`}
+                    </span>
+                  )}
                   {!ev.is_visible && (
                     <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-50 text-red-600">
                       회원화면 숨김

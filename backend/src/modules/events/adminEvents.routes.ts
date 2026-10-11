@@ -31,7 +31,8 @@ const imageUpload = multer({
 adminEventsRouter.get("/", async (req, res) => {
   const { rows } = await pool.query(`
     SELECT e.id, e.title, e.description, e.status, (e.image_path IS NOT NULL) AS has_image,
-           e.application_prompt, e.image_position_y, e.capacity, e.is_visible, e.display_order, e.survey_url,
+           e.application_prompt, e.image_position_y, e.capacity, e.is_visible, e.display_order, e.survey_url, e.end_date::text AS end_date,
+           (e.end_date IS NOT NULL AND e.end_date < (now() AT TIME ZONE 'Asia/Seoul')::date) AS is_ended,
            e.created_at,
            (SELECT COUNT(*)::int FROM union_event_applications a WHERE a.event_id = e.id) AS applicant_count,
            (SELECT COUNT(*)::int FROM union_event_applications a WHERE a.event_id = e.id AND a.status = 'waitlisted') AS waitlisted_count
@@ -154,6 +155,13 @@ const displayOrderSchema = z
   .refine((v) => v === undefined || v.trim() === "" || /^-?\d+$/.test(v.trim()), "순서는 숫자로 입력해주세요.")
   .transform((v) => (v === undefined || v.trim() === "" ? null : parseInt(v, 10)));
 
+// 종료일 — "YYYY-MM-DD", 비어있으면 null(자동 숨김 없음).
+const endDateSchema = z
+  .string()
+  .optional()
+  .refine((v) => v === undefined || v.trim() === "" || /^\d{4}-\d{2}-\d{2}$/.test(v.trim()), "종료일 형식이 올바르지 않습니다.")
+  .transform((v) => (v === undefined || v.trim() === "" ? null : v.trim()));
+
 // 설문조사(구글폼 등) 링크 — 비어있으면 null(회원 화면에 버튼 노출 안 함).
 const surveyUrlSchema = z
   .string()
@@ -173,6 +181,7 @@ const createSchema = z.object({
   isVisible: isVisibleSchema,
   displayOrder: displayOrderSchema,
   surveyUrl: surveyUrlSchema,
+  endDate: endDateSchema,
 });
 
 adminEventsRouter.post("/", (req, res, next) => {
@@ -183,7 +192,7 @@ adminEventsRouter.post("/", (req, res, next) => {
       if (!parsed.success) {
         return res.status(400).json({ error: "입력값을 확인해주세요.", details: parsed.error.flatten() });
       }
-      const { title, description, applicationPrompt, imagePositionY, capacity, isVisible, displayOrder, surveyUrl } =
+      const { title, description, applicationPrompt, imagePositionY, capacity, isVisible, displayOrder, surveyUrl, endDate } =
         parsed.data;
 
       if (req.file && !detectImageType(req.file.buffer)) {
@@ -192,8 +201,8 @@ adminEventsRouter.post("/", (req, res, next) => {
 
       const { rows } = await pool.query(
         `INSERT INTO union_events
-           (title, description, application_prompt, image_position_y, capacity, is_visible, display_order, survey_url)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+           (title, description, application_prompt, image_position_y, capacity, is_visible, display_order, survey_url, end_date)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
         [
           title,
           description ?? null,
@@ -203,6 +212,7 @@ adminEventsRouter.post("/", (req, res, next) => {
           isVisible ?? true,
           displayOrder,
           surveyUrl,
+          endDate,
         ]
       );
       const id = rows[0].id;
@@ -235,6 +245,7 @@ const updateSchema = z.object({
   isVisible: isVisibleSchema,
   displayOrder: displayOrderSchema,
   surveyUrl: surveyUrlSchema,
+  endDate: endDateSchema,
 });
 
 adminEventsRouter.put("/:id", (req, res, next) => {
@@ -260,6 +271,7 @@ adminEventsRouter.put("/:id", (req, res, next) => {
       if (parsed.data.isVisible !== undefined) updates.is_visible = parsed.data.isVisible;
       if (req.body.displayOrder !== undefined) updates.display_order = parsed.data.displayOrder;
       if (req.body.surveyUrl !== undefined) updates.survey_url = parsed.data.surveyUrl;
+      if (req.body.endDate !== undefined) updates.end_date = parsed.data.endDate;
 
       if (req.file && !detectImageType(req.file.buffer)) {
         return res.status(400).json({ error: "이미지 파일이 손상되었거나 지원하지 않는 형식입니다." });

@@ -20,6 +20,7 @@ memberEventsRouter.get("/", async (req, res) => {
      FROM union_events e
      LEFT JOIN union_event_applications a ON a.event_id = e.id AND a.member_id = $1
      WHERE e.is_visible = true
+       AND (e.end_date IS NULL OR e.end_date >= (now() AT TIME ZONE 'Asia/Seoul')::date)
      ORDER BY e.display_order ASC NULLS LAST, e.created_at DESC`,
     [req.session.auth!.id]
   );
