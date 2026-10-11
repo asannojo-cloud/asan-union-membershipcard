@@ -179,6 +179,19 @@ export default function EventsListPage() {
     }
   }
 
+  // 목록에서 바로 회원 화면 표출 여부만 켜고 끈다(수정 폼을 열 필요 없음).
+  async function handleToggleVisible(ev: EventItem, visible: boolean) {
+    setListError(null);
+    // 체크박스가 바로 반응하도록 먼저 화면 상태를 바꾸고, 실패하면 되돌린다.
+    setEvents((prev) => prev && prev.map((e) => (e.id === ev.id ? { ...e, is_visible: visible } : e)));
+    try {
+      await api.put(`/admin/events/${ev.id}`, { isVisible: String(visible) });
+    } catch (err) {
+      setListError(err instanceof ApiError ? err.message : "표출 설정 변경 중 오류가 발생했습니다.");
+      await load();
+    }
+  }
+
   async function handleDelete(ev: EventItem) {
     if (!confirm(`"${ev.title}" 이벤트를 삭제하시겠습니까? 신청 내역도 함께 삭제됩니다.`)) return;
     setListError(null);
@@ -455,6 +468,15 @@ export default function EventsListPage() {
                   <button type="button" onClick={() => handleDelete(ev)} className="text-red-600 underline">
                     삭제
                   </button>
+                  <label className="flex items-center gap-1 text-slate-600 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={ev.is_visible}
+                      onChange={(e) => handleToggleVisible(ev, e.target.checked)}
+                      className="rounded border-slate-300"
+                    />
+                    회원화면 표출
+                  </label>
                 </div>
               </div>
             </div>
