@@ -115,12 +115,12 @@ export default function MemberEventsSection() {
                 <button
                   type="button"
                   onClick={() => setExpandedId(expanded ? null : event.id)}
-                  className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-medium text-slate-500 border-b border-slate-100"
+                  className="w-full flex items-center justify-between px-4 py-3 text-sm font-bold text-red-600 bg-red-50 border-b border-red-100"
                 >
-                  <span>행사 세부안내 {expanded ? "접기" : "펼쳐보기"}</span>
+                  <span>📢 행사 세부안내 {expanded ? "접기" : "펼쳐보기"}</span>
                   <svg
                     viewBox="0 0 24 24"
-                    className={`w-4 h-4 transition-transform ${expanded ? "rotate-180" : ""}`}
+                    className={`w-5 h-5 transition-transform ${expanded ? "rotate-180" : ""}`}
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="2"
