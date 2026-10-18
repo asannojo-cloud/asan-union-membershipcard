@@ -69,23 +69,33 @@ export default function MemberLayout() {
         </Link>
       </header>
 
-      <main className="flex-1 pb-20">
+      <main className="flex-1 flex flex-col pb-24">
         <Outlet />
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 shadow-[0_-4px_12px_rgba(15,23,42,0.08)] flex pb-[env(safe-area-inset-bottom)]">
         {tabs.map((tab) => (
           <NavLink
             key={tab.to}
             to={tab.to}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs font-bold tracking-tight ${
+              `flex-1 flex flex-col items-center gap-1 py-3 text-xs font-bold tracking-tight transition-colors ${
                 isActive ? "text-blue-700" : "text-slate-500"
               }`
             }
           >
-            <span className="text-xl leading-none">{tab.icon}</span>
-            {tab.label}
+            {({ isActive }) => (
+              <>
+                <span
+                  className={`flex items-center justify-center h-9 w-9 rounded-full text-2xl leading-none transition-colors ${
+                    isActive ? "bg-blue-50" : ""
+                  }`}
+                >
+                  {tab.icon}
+                </span>
+                {tab.label}
+              </>
+            )}
           </NavLink>
         ))}
       </nav>

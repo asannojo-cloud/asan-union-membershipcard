@@ -10,7 +10,7 @@ export default function MemberCardPage() {
   if (!member) return null;
 
   return (
-    <div className="flex flex-col items-center px-6 pt-8">
+    <div className="flex-1 flex flex-col items-center justify-center px-6 py-8">
       <div className="w-full max-w-sm bg-white rounded-3xl shadow-md border border-slate-200 p-6 flex flex-col items-center">
         <h1 className="text-[1.35rem] font-bold text-slate-900 tracking-wide mb-4">조합원증</h1>
 

@@ -217,7 +217,7 @@ export default function MemberLoginPage() {
           </form>
         )}
 
-        <p className="mt-4 text-xs text-slate-400 text-center">
+        <p className="mt-4 text-[0.9rem] text-slate-400 text-center">
           문의전화{" "}
           <a href="tel:041-540-2667" className="text-slate-500 font-medium underline">
             041-540-2667
