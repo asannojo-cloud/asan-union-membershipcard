@@ -103,7 +103,7 @@ export default function MemberEventsSection() {
         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 shrink-0 text-base">
           📣
         </span>
-        <h3 className="text-base font-bold text-slate-900">노조 행사 참여</h3>
+        <h3 className="text-base font-bold text-slate-900">공지사항</h3>
       </div>
       {error && <p className="text-xs text-red-600 px-1 mb-2">{error}</p>}
       <div className="space-y-3">
