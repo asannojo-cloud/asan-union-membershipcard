@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api } from "../shared/api";
+import { api, ApiError } from "../shared/api";
 
 interface Applicant {
+  applicationId: number;
   memberId: string;
   name: string | null;
   phone: string | null;
@@ -23,11 +24,31 @@ export default function EventApplicantsPage() {
   const navigate = useNavigate();
   const [data, setData] = useState<{ event: { id: number; title: string }; applicants: Applicant[] } | null>(null);
 
-  useEffect(() => {
-    api
+  const [error, setError] = useState<string | null>(null);
+
+  function load() {
+    return api
       .get<{ event: { id: number; title: string }; applicants: Applicant[] }>(`/admin/events/${eventId}/applications`)
       .then(setData);
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
+
+  // 회원은 직접 취소할 수 없으므로, 잘못 신청했거나 다시 신청해야 하는 경우 관리자가 여기서 지운다.
+  async function handleDelete(a: Applicant) {
+    if (!confirm(`${a.name ?? a.memberId}님의 참여 내역을 삭제하시겠습니까?
+삭제하면 해당 회원이 다시 신청할 수 있습니다.`)) return;
+    setError(null);
+    try {
+      await api.delete(`/admin/events/${eventId}/applications/${a.applicationId}`);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "삭제 중 오류가 발생했습니다.");
+    }
+  }
 
   if (!data) return <p className="text-sm text-slate-400">불러오는 중...</p>;
 
@@ -55,6 +76,7 @@ export default function EventApplicantsPage() {
         )}
       </div>
       <p className="text-sm text-slate-500 mb-6">신청자 {data.applicants.length}명</p>
+      {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
 
       {data.applicants.length === 0 ? (
         <p className="text-sm text-slate-400">아직 신청한 회원이 없습니다.</p>
@@ -69,11 +91,12 @@ export default function EventApplicantsPage() {
                 <th className="text-left font-medium px-4 py-3">신청일시</th>
                 <th className="text-left font-medium px-4 py-3">상태</th>
                 <th className="text-left font-medium px-4 py-3">신청사유</th>
+                <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {data.applicants.map((a) => (
-                <tr key={a.memberId} className="border-t border-slate-100">
+                <tr key={a.applicationId} className="border-t border-slate-100">
                   <td className="px-4 py-3">{a.memberId}</td>
                   <td className="px-4 py-3">{a.name}</td>
                   <td className="px-4 py-3">{formatPhone(a.phone)}</td>
@@ -90,6 +113,11 @@ export default function EventApplicantsPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-slate-600 whitespace-pre-wrap max-w-xs">{a.comment || "-"}</td>
+                  <td className="px-4 py-3">
+                    <button type="button" onClick={() => handleDelete(a)} className="text-xs text-red-600 underline whitespace-nowrap">
+                      삭제
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

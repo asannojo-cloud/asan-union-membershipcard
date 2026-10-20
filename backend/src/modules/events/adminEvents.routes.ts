@@ -59,7 +59,7 @@ adminEventsRouter.get("/:id/applications", async (req, res) => {
   if (!eventRows[0]) return res.status(404).json({ error: "이벤트를 찾을 수 없습니다." });
 
   const { rows } = await pool.query(
-    `SELECT m.member_id, m.name_enc, m.phone_enc, a.applied_at, a.comment, a.status
+    `SELECT a.id AS application_id, m.member_id, m.name_enc, m.phone_enc, a.applied_at, a.comment, a.status
      FROM union_event_applications a
      JOIN members m ON m.id = a.member_id
      WHERE a.event_id = $1
@@ -67,6 +67,7 @@ adminEventsRouter.get("/:id/applications", async (req, res) => {
     [id]
   );
   const applicants = rows.map((r) => ({
+    applicationId: r.application_id,
     memberId: r.member_id,
     name: decryptName(r.name_enc),
     phone: decryptPhone(r.phone_enc),
@@ -76,6 +77,59 @@ adminEventsRouter.get("/:id/applications", async (req, res) => {
   }));
 
   res.json({ event: eventRows[0], applicants });
+});
+
+// 신청 내역 삭제 — 회원은 직접 취소할 수 없으므로 관리자가 지워주면 그 회원이 다시 신청할 수 있다.
+// 확정자를 지우면 정원에 자리가 생기므로 가장 먼저 신청한 대기자를 확정으로 올려준다.
+adminEventsRouter.delete("/:id/applications/:applicationId", async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const applicationId = parseInt(req.params.applicationId, 10);
+  if (!Number.isInteger(id) || !Number.isInteger(applicationId)) {
+    return res.status(400).json({ error: "잘못된 요청입니다." });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(`SELECT id FROM union_events WHERE id = $1 FOR UPDATE`, [id]);
+
+    const { rows } = await client.query(
+      `DELETE FROM union_event_applications a
+       USING members m
+       WHERE a.id = $1 AND a.event_id = $2 AND m.id = a.member_id
+       RETURNING a.status, m.member_id`,
+      [applicationId, id]
+    );
+    if (!rows[0]) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "신청 내역을 찾을 수 없습니다." });
+    }
+
+    if (rows[0].status === "confirmed") {
+      await client.query(
+        `UPDATE union_event_applications SET status = 'confirmed'
+         WHERE id = (
+           SELECT id FROM union_event_applications
+           WHERE event_id = $1 AND status = 'waitlisted'
+           ORDER BY applied_at ASC LIMIT 1
+         )`,
+        [id]
+      );
+    }
+    await client.query("COMMIT");
+
+    await recordAudit({
+      adminId: req.session.auth!.id,
+      action: "event_application_delete",
+      oldValue: { eventId: id, applicationId, memberId: rows[0].member_id },
+    });
+    res.json({ ok: true });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
 });
 
 // 신청자 명단 Excel 다운로드.
