@@ -80,20 +80,6 @@ export default function MemberEventsSection() {
     }
   }
 
-  async function handleCancel(id: number) {
-    if (!confirm("신청을 취소하시겠습니까?")) return;
-    setError(null);
-    setBusyId(id);
-    try {
-      await api.delete(`/member/events/${id}/apply`);
-      await loadEvents();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "취소 중 오류가 발생했습니다.");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
   if (!events || events.length === 0) return null;
 
   // 협약기관 검색 등 다른 메뉴들과 구분되는 별도 메뉴처럼 보이도록, 배경색이 다른 박스로 감싼다.
@@ -145,23 +131,14 @@ export default function MemberEventsSection() {
 
                 {event.my_status !== null ? (
                   <div className="flex items-center gap-2 flex-wrap">
-                    {/* 버튼 하나로 현재 상태 표시 + 클릭 시 신청 취소(삭제)까지 처리 */}
-                    <button
-                      type="button"
-                      onClick={() => handleCancel(event.id)}
-                      disabled={busyId === event.id}
-                      className={`inline-block rounded-lg text-sm font-medium px-4 py-2 disabled:opacity-50 ${
-                        event.my_status === "waitlisted"
-                          ? "bg-amber-50 text-amber-700 hover:bg-amber-100"
-                          : "bg-green-50 text-green-700 hover:bg-green-100"
+                    {/* 한번 참여하면 회원이 직접 취소할 수 없다(눌러도 아무 동작 없는 상태 표시용 배지). */}
+                    <span
+                      className={`inline-block rounded-lg text-sm font-medium px-4 py-2 ${
+                        event.my_status === "waitlisted" ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"
                       }`}
                     >
-                      {busyId === event.id
-                        ? "취소 중..."
-                        : event.my_status === "waitlisted"
-                          ? "대기(삭제)"
-                          : "참여(삭제)"}
-                    </button>
+                      {event.my_status === "waitlisted" ? "대기 중" : "참여 완료"}
+                    </span>
                     {event.survey_url && (
                       <a
                         href={event.survey_url}

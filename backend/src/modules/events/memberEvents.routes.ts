@@ -111,55 +111,9 @@ memberEventsRouter.post("/:id/apply", async (req, res) => {
   }
 });
 
-// 신청 취소 — 본인 신청만 취소할 수 있다. 확정자가 취소하면, 정원이 있던 자리이므로
-// 가장 먼저 신청한 대기자를 자동으로 확정으로 올려준다.
-memberEventsRouter.delete("/:id/apply", async (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: "잘못된 요청입니다." });
-
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-
-    await client.query(`SELECT id FROM union_events WHERE id = $1 FOR UPDATE`, [id]);
-
-    const { rows: cancelledRows } = await client.query(
-      `DELETE FROM union_event_applications WHERE event_id = $1 AND member_id = $2 RETURNING status`,
-      [id, req.session.auth!.id]
-    );
-    if (!cancelledRows[0]) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({ error: "신청 내역을 찾을 수 없습니다." });
-    }
-
-    if (cancelledRows[0].status === "confirmed") {
-      await client.query(
-        `UPDATE union_event_applications SET status = 'confirmed'
-         WHERE id = (
-           SELECT id FROM union_event_applications
-           WHERE event_id = $1 AND status = 'waitlisted'
-           ORDER BY applied_at ASC LIMIT 1
-         )`,
-        [id]
-      );
-    }
-
-    await client.query("COMMIT");
-
-    const { rows: memberRows } = await pool.query(`SELECT member_id FROM members WHERE id = $1`, [
-      req.session.auth!.id,
-    ]);
-    await recordAudit({
-      memberId: memberRows[0]?.member_id ?? null,
-      action: "event_apply_cancel",
-      newValue: { eventId: id },
-    });
-
-    res.json({ ok: true });
-  } catch (e) {
-    await client.query("ROLLBACK");
-    throw e;
-  } finally {
-    client.release();
-  }
+// 신청 취소 — 회원이 직접 취소할 수 없도록 막았다(2026-10: "참여(삭제)" 삭제 불가 요청).
+// 취소가 꼭 필요한 경우는 조합 사무국에 문의해 처리한다. 화면에서 버튼을 없애도 API로 직접 호출하면
+// 취소되는 일이 없도록 서버에서도 거부한다.
+memberEventsRouter.delete("/:id/apply", (req, res) => {
+  res.status(403).json({ error: "신청한 참여는 직접 취소할 수 없습니다. 조합 사무국에 문의해주세요." });
 });
